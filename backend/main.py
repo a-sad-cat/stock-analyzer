@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 logger.info("=" * 50)
 logger.info("stock-analyzer 后端启动中...")
 logger.info("AKShare 后台预热可能需要 30-60 秒")
+logger.info("后台预取: 启动后自动缓存全市场日K数据（首次 3-5 分钟）")
 logger.info("定时任务: 每天 10:00 / 11:40 / 15:10 自动刷新全市场数据")
 logger.info("=" * 50)
 
@@ -116,6 +117,18 @@ threading.Thread(target=_warm_cache, daemon=True).start()
 threading.Thread(target=_warm_sectors, daemon=True).start()
 threading.Thread(target=_warm_sector_map, daemon=True).start()
 threading.Thread(target=build_stock_sectors_map, daemon=True).start()
+
+# --- 启动后台数据预取（全市场股票日K缓存到 SQLite，首次较慢后续增量） ---
+def _start_prefetch():
+    try:
+        from scheduler import prefetch_all_stock_data
+        logger.info("后台开始预取全市场股票数据（首次需 3-5 分钟，后续增量秒级）...")
+        prefetch_all_stock_data()
+        logger.info("全市场数据预取完成")
+    except Exception as e:
+        logger.warning(f"全市场数据预取失败: {e}")
+
+threading.Thread(target=_start_prefetch, daemon=True).start()
 
 # --- 初始化定时任务 ---
 try:
