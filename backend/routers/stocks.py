@@ -6,6 +6,8 @@
 """
 
 import logging
+import re
+import requests
 import time
 from datetime import datetime, timedelta
 
@@ -156,41 +158,43 @@ def api_stock_kline(code: str, days: int = Query(60, ge=10, le=365, description=
 
 # 行情数据缓存（盘中30秒刷新，避免每次请求都等AKShare）
 _quotes_cache: dict = {"data": None, "time": 0}
-_QUOTES_TTL = 30  # 30秒缓存
+_QUOTES_TTL = 300  # 5分钟缓存
+
+_SINA_CODES = {"sh000001": "上证指数", "sz399001": "深证成指", "sz399006": "创业板指"}
 
 @router.get("/market/quotes")
 def api_market_quotes():
-    """获取实时行情（大盘+个股概览）"""
+    """获取实时行情（大盘指数）"""
     now = time.time()
     if _quotes_cache["data"] and now - _quotes_cache["time"] < _QUOTES_TTL:
         return _quotes_cache["data"]
 
+    indices = []
     try:
-        import akshare as ak
-
-        try:
-            index_df = ak.stock_zh_index_spot_sina()
-            target_codes = {"sh000001": "上证指数", "sz399001": "深证成指", "sz399006": "创业板指"}
-            indices = []
-            for _, row in index_df.iterrows():
-                code = row['代码']
-                if code in target_codes:
-                    indices.append({
-                        "name": target_codes[code],
-                        "close": round(float(row['最新价']), 2),
-                        "pct_chg": round(float(row['涨跌幅']), 2),
-                    })
-        except Exception as e:
-            logger.warning(f"获取指数行情失败: {e}")
-            indices = []
-
-        result = {"indices": indices}
-        _quotes_cache["data"] = result
-        _quotes_cache["time"] = now
-        return result
+        codes = ",".join(_SINA_CODES.keys())
+        r = requests.get(
+            f"https://hq.sinajs.cn/list={codes}",
+            headers={"Referer": "https://finance.sina.com.cn"},
+            timeout=5,
+        )
+        for line in r.text.strip().split("\n"):
+            m = re.search(r'hq_str_(\w+)="(.+)"', line)
+            if not m:
+                continue
+            code = m.group(1)
+            parts = m.group(2).split(",")
+            name = _SINA_CODES.get(code, parts[0])
+            close = float(parts[3]) if len(parts) > 3 and parts[3] else 0
+            prev_close = float(parts[2]) if len(parts) > 2 and parts[2] else close
+            pct_chg = round((close - prev_close) / prev_close * 100, 2) if prev_close else 0
+            indices.append({"name": name, "close": round(close, 2), "pct_chg": pct_chg})
     except Exception as e:
-        logger.error(f"获取行情失败: {e}")
-        return {"indices": []}
+        logger.warning(f"获取指数行情失败: {e}")
+
+    result = {"indices": indices}
+    _quotes_cache["data"] = result
+    _quotes_cache["time"] = now
+    return result
 
 
 @router.get("/{code}/sectors")
