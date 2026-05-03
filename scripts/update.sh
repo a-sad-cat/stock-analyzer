@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==========================================
 # stock-analyzer 快捷更新脚本
-# 拉取最新代码 + 安装依赖 + 重启服务
+# 拉取最新代码 + 重启服务（依赖只首次装）
 # 用法: bash scripts/update.sh
 # ==========================================
 
@@ -16,11 +16,8 @@ git remote set-url origin https://ghfast.top/https://github.com/a-sad-cat/stock-
 git pull origin deploy/aliyun
 git remote set-url origin https://github.com/a-sad-cat/stock-analyzer.git
 
-echo ">>> 更新依赖..."
-source venv/bin/activate
-pip install -r backend/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-
 echo ">>> 重启服务..."
+source venv/bin/activate
 kill $(lsof -t -i:8000) 2>/dev/null || true
 cd backend
 nohup uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > ../app.log 2>&1 &
