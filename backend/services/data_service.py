@@ -90,6 +90,34 @@ def _save_daily_data(db: Session, code: str, df: pd.DataFrame):
 
 
 # ---------- 公开接口 ----------
+def _fix_market_from_code(raw_code: str) -> str:
+    """从股票代码判断正确市场（修复 DB 中存错的 market 字段）"""
+    raw = str(raw_code).lower()
+    for prefix, market in [('sh', 'SH'), ('sz', 'SZ'), ('bj', 'BJ')]:
+        if raw.startswith(prefix):
+            return market
+    first = raw[0] if raw else ''
+    if first in ('6', '9'):
+        return 'SH'
+    if first in ('0', '3', '2'):
+        return 'SZ'
+    return 'BJ'
+
+
+def repair_stock_market(db: Session):
+    """修复数据库中市场分类错误的股票"""
+    stocks = db.query(Stock).all()
+    fixed = 0
+    for s in stocks:
+        correct = _fix_market_from_code(s.code)
+        if s.market != correct:
+            s.market = correct
+            fixed += 1
+    if fixed:
+        db.commit()
+        logger.info(f"修复 {fixed} 只股票的市场分类")
+
+
 def get_all_stocks(db: Session = None) -> list[dict]:
     """
     获取所有A股列表
@@ -104,6 +132,7 @@ def get_all_stocks(db: Session = None) -> list[dict]:
         # 先从本地数据库获取
         stocks = db.query(Stock).all()
         if stocks and len(stocks) > 1000:
+            repair_stock_market(db)
             return [{"code": s.code, "name": s.name, "market": s.market, "industry": s.industry} for s in stocks]
 
         # 本地没有，从 AKShare（新浪数据源）获取
