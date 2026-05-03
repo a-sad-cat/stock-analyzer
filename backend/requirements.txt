@@ -1,17 +1,14 @@
 # ========================================
 # stock-analyzer 后端依赖
-# 安装命令: pip install -r requirements.txt
-# 注意: 使用 pandas-ta 替代 ta-lib（纯Python，无需编译）
+# 技术指标在 data_service.py 中手动实现（numpy/pandas），无需额外库
 # ========================================
 
 fastapi>=0.110.0          # Web 框架
 uvicorn>=0.29.0            # ASGI 服务器
 gunicorn>=22.0.0           # WSGI 服务器（生产部署）
 akshare>=1.14.0            # A股数据源（免费）
-pandas>=2.0.0,<3.0.0       # 数据处理（AKShare 不支持 pandas 3.x）
+pandas>=2.0.0,<3.0.0       # 数据处理
 numpy>=1.24.0              # 数值计算
-pandas-ta>=0.3.14b0        # 技术指标计算（纯Python，替代ta-lib）
 sqlalchemy>=2.0.0          # ORM 数据库操作
 httpx>=0.27.0              # HTTP 请求客户端
 pydantic>=2.0.0            # 数据校验
-# psycopg2-binary 不需要了，国内云直接用 SQLite，更快更简单

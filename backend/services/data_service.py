@@ -263,46 +263,53 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
 
 
 def _add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """添加技术指标到 DataFrame"""
+    """手动计算技术指标（无需 pandas-ta，纯 numpy/pandas 实现）"""
     try:
-        import pandas_ta as ta
+        close = df['close']
+        high = df['high']
+        low = df['low']
+        volume = df['volume']
 
         # 均线
-        df['MA5'] = ta.sma(df['close'], length=5)
-        df['MA10'] = ta.sma(df['close'], length=10)
-        df['MA20'] = ta.sma(df['close'], length=20)
-        df['MA60'] = ta.sma(df['close'], length=60)
-        df['MA120'] = ta.sma(df['close'], length=120)
+        df['MA5'] = close.rolling(window=5).mean()
+        df['MA10'] = close.rolling(window=10).mean()
+        df['MA20'] = close.rolling(window=20).mean()
+        df['MA60'] = close.rolling(window=60).mean()
+        df['MA120'] = close.rolling(window=120).mean()
 
-        # MACD
-        macd = ta.macd(df['close'], fast=12, slow=26, signal=9)
-        if macd is not None:
-            df['DIF'] = macd['MACD_12_26_9'] if 'MACD_12_26_9' in macd.columns else macd.iloc[:, 0]
-            df['DEA'] = macd['MACDs_12_26_9'] if 'MACDs_12_26_9' in macd.columns else macd.iloc[:, 1]
-            df['MACD'] = macd['MACDh_12_26_9'] if 'MACDh_12_26_9' in macd.columns else macd.iloc[:, 2]
+        # MACD（EMA 算法）
+        ema12 = close.ewm(span=12, adjust=False).mean()
+        ema26 = close.ewm(span=26, adjust=False).mean()
+        df['DIF'] = ema12 - ema26
+        df['DEA'] = df['DIF'].ewm(span=9, adjust=False).mean()
+        df['MACD'] = 2 * (df['DIF'] - df['DEA'])
 
         # RSI
-        df['RSI'] = ta.rsi(df['close'], length=14)
+        delta = close.diff()
+        gain = delta.where(delta > 0, 0)
+        loss = (-delta).where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+        rs = avg_gain / avg_loss.replace(0, float('nan'))
+        df['RSI'] = 100 - (100 / (1 + rs))
 
         # KDJ
-        kdj = ta.stoch(df['high'], df['low'], df['close'], k=9, d=3, smooth_k=3)
-        if kdj is not None:
-            cols = kdj.columns
-            df['K'] = kdj[cols[0]]
-            df['D'] = kdj[cols[1]]
-            df['J'] = kdj[cols[2]] if len(cols) > 2 else 3 * kdj[cols[0]] - 2 * kdj[cols[1]]
+        low_9 = low.rolling(window=9).min()
+        high_9 = high.rolling(window=9).max()
+        rsv = 100 * ((close - low_9) / (high_9 - low_9).replace(0, float('nan')))
+        df['K'] = rsv.ewm(com=2, adjust=False).mean()
+        df['D'] = df['K'].ewm(com=2, adjust=False).mean()
+        df['J'] = 3 * df['K'] - 2 * df['D']
 
         # 成交量均线
-        df['VOL_MA5'] = ta.sma(df['volume'], length=5)
-        df['VOL_MA10'] = ta.sma(df['volume'], length=10)
+        df['VOL_MA5'] = volume.rolling(window=5).mean()
+        df['VOL_MA10'] = volume.rolling(window=10).mean()
 
         # 布林带
-        bbands = ta.bbands(df['close'], length=20, std=2)
-        if bbands is not None:
-            cols = bbands.columns
-            df['BB_UPPER'] = bbands[cols[0]]
-            df['BB_MID'] = bbands[cols[1]]
-            df['BB_LOWER'] = bbands[cols[2]]
+        df['BB_MID'] = close.rolling(window=20).mean()
+        bb_std = close.rolling(window=20).std()
+        df['BB_UPPER'] = df['BB_MID'] + 2 * bb_std
+        df['BB_LOWER'] = df['BB_MID'] - 2 * bb_std
 
     except Exception as e:
         logger.warning(f"计算技术指标失败: {e}")
