@@ -12,6 +12,8 @@ env/
 
 # Database
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 
 # Node
@@ -31,6 +33,11 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Build artifacts
+*.log
+frontend/dist/
+*.tsbuildinfo
 
 # Render
 render.yaml
