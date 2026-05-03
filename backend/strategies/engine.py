@@ -360,22 +360,19 @@ def toggle_strategy_enabled(db: Session, strategy_id: int) -> dict | None:
     }
 
 
-def run_strategy(db: Session, strategy_id: int, stock_limit: int = 100) -> list[dict]:
-    """运行单个策略进行全市场扫描"""
+def run_strategy(db: Session, strategy_id: int, stock_limit: int = 0, top_k: int = 50) -> list[dict]:
+    """运行单个策略进行全市场扫描，返回评分最高的 top_k 条"""
     if not _builtin_strategies:
         _init_builtin_strategies(db)
 
-    # 获取策略
     strategy = db.query(Strategy).filter(Strategy.id == strategy_id).first()
     if not strategy:
         return []
 
-    # 获取股票列表
     all_stocks = get_all_stocks(db)
     if not all_stocks:
         return []
 
-    # 过滤 ST / *ST 股票（基本面太差，不适合短线策略）
     before_filter = len(all_stocks)
     all_stocks = [
         s for s in all_stocks
@@ -384,11 +381,9 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 100) -> list[
     if before_filter != len(all_stocks):
         logger.info(f"过滤掉 {before_filter - len(all_stocks)} 只 ST/*ST 股票")
 
-    # 如果是内置策略，用策略引擎评估
     if strategy.type == "builtin" and strategy.id in _builtin_strategies:
         strategy_obj = _builtin_strategies[strategy.id]
     elif strategy.type == "custom":
-        # 自定义策略 — 解析配置并创建临时策略对象
         strategy_obj = CustomStrategyExecutor(strategy.name, strategy.description, strategy.config or {})
     else:
         return []
@@ -428,7 +423,7 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 100) -> list[
         done = 0
         for f in as_completed(futures):
             done += 1
-            if done % 20 == 0:
+            if done % 100 == 0:
                 logger.info(f"策略 [{strategy.name}] 扫描进度: {done}/{total}")
             r = f.result()
             if r:
@@ -442,21 +437,21 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 100) -> list[
                     reason=r.get('reason', ''),
                 ))
                 results.append(r)
-                if len(results) % 20 == 0:
+                if len(results) % 50 == 0:
                     db.commit()
 
     db.commit()
 
-    # 更新策略运行时间
     strategy.last_run = datetime.now()
     db.commit()
 
-    # 按评分排序
     results.sort(key=lambda x: x.get('score', 0), reverse=True)
-    return results
+    top = results[:top_k]
+    logger.info(f"策略 [{strategy.name}] 扫描完成，{len(results)} 只匹配，返回 Top {len(top)}")
+    return top
 
 
-def run_all_strategies(db: Session, stock_limit: int = 100) -> dict:
+def run_all_strategies(db: Session, stock_limit: int = 0, top_k: int = 50) -> dict:
     """运行所有启用的策略"""
     if not _builtin_strategies:
         _init_builtin_strategies(db)
@@ -466,7 +461,7 @@ def run_all_strategies(db: Session, stock_limit: int = 100) -> dict:
 
     for strategy in strategies:
         try:
-            results = run_strategy(db, strategy.id, stock_limit)
+            results = run_strategy(db, strategy.id, stock_limit, top_k)
             all_results[strategy.id] = {
                 "strategy_name": strategy.name,
                 "count": len(results),

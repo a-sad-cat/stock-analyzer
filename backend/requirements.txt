@@ -6,6 +6,7 @@
 fastapi>=0.110.0          # Web 框架
 uvicorn>=0.29.0            # ASGI 服务器
 gunicorn>=22.0.0           # WSGI 服务器（生产部署）
+apscheduler>=3.10.0        # 后台定时任务
 akshare>=1.14.0            # A股数据源（免费）
 pandas>=2.0.0,<3.0.0       # 数据处理
 numpy>=1.24.0              # 数值计算
