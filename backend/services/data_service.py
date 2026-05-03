@@ -168,13 +168,9 @@ def get_all_stocks(db: Session = None) -> list[dict]:
         # 本地没有，从 AKShare（新浪数据源）获取
         import akshare as ak
         logger.info("从 AKShare（新浪源）获取A股列表...")
-        try:
         df = ak.stock_zh_a_spot_em()
-            df = df[['代码', '名称']].rename(columns={'代码': 'code', '名称': 'name'})
-            df['industry'] = ''
-        except Exception as e:
-            logger.error(f"获取股票列表失败: {e}")
-            return []
+        df = df[['代码', '名称']].rename(columns={'代码': 'code', '名称': 'name'})
+        df['industry'] = ''
 
         # 清理代码前缀 + 判断市场
         def _clean_code_and_market(raw):
