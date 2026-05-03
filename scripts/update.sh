@@ -16,6 +16,12 @@ git remote set-url origin https://ghfast.top/https://github.com/a-sad-cat/stock-
 git pull origin deploy/aliyun
 git remote set-url origin https://github.com/a-sad-cat/stock-analyzer.git
 
+echo ">>> 构建前端..."
+cd frontend
+npm install --silent
+npm run build
+cd ..
+
 echo ">>> 重启服务..."
 source venv/bin/activate
 fuser -k 8000/tcp 2>/dev/null || true
