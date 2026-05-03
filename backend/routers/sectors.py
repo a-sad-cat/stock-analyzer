@@ -24,7 +24,7 @@ def api_sector_heatmap(sector_type: str = Query("", description="过滤: concept
     """获取板块热度排名"""
     sectors = refresh_sectors()
     if not sectors:
-        raise HTTPException(status_code=503, detail="无法获取板块数据")
+        return {"sectors": [], "total": 0, "message": "板块数据暂时不可用"}
 
     if sector_type:
         sectors = [s for s in sectors if s["sector_type"] == sector_type]
