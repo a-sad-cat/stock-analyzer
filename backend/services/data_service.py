@@ -112,35 +112,38 @@ def get_all_stocks(db: Session = None) -> list[dict]:
         try:
             df = ak.stock_zh_a_spot()
             df = df[['代码', '名称']].rename(columns={'代码': 'code', '名称': 'name'})
-            df['market'] = df['code'].apply(lambda x: 'SH' if x.startswith(('6', '9')) else 'SZ' if x.startswith(('0', '3', '2')) else 'BJ')
             df['industry'] = ''
         except Exception as e:
             logger.error(f"获取股票列表失败: {e}")
             return []
 
-        # 标准化列名
-        if 'code' not in df.columns:
-            for col, alt in [('code', '代码'), ('name', '名称'), ('market', '交易所'), ('industry', '行业')]:
-                if col not in df.columns and alt in df.columns:
-                    df = df.rename(columns={alt: col})
+        # 清理代码前缀 + 判断市场
+        def _clean_code_and_market(raw):
+            raw = str(raw).lower()
+            for prefix, market in [('sh', 'SH'), ('sz', 'SZ'), ('bj', 'BJ')]:
+                if raw.startswith(prefix):
+                    return raw[len(prefix):].zfill(6), market
+            # 无前缀时按首位数字判断
+            first = raw[0]
+            if first in ('6', '9'):
+                return raw.zfill(6), 'SH'
+            if first in ('0', '3', '2'):
+                return raw.zfill(6), 'SZ'
+            return raw.zfill(6), 'BJ'
 
-        # 处理市场分类
-        if 'market' not in df.columns:
-            df['market'] = df['code'].apply(
-                lambda x: 'SH' if str(x).startswith(('6', '9')) else 'SZ' if str(x).startswith(('0', '3', '2')) else 'BJ'
-            )
-        if 'industry' not in df.columns:
-            df['industry'] = ''
+        codes_markets = df['code'].apply(_clean_code_and_market)
+        df['code'] = codes_markets.apply(lambda x: x[0])
+        df['market'] = codes_markets.apply(lambda x: x[1])
 
         # 保存到数据库
         for _, row in df.iterrows():
-            code = str(row['code']).zfill(6)
+            code = row['code']
             existing = db.query(Stock).filter(Stock.code == code).first()
             if not existing:
                 stock = Stock(
                     code=code,
                     name=str(row['name']),
-                    market=str(row.get('market', 'SH')),
+                    market=row['market'],
                     industry=str(row.get('industry', '')),
                 )
                 db.add(stock)
