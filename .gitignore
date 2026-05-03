@@ -38,6 +38,3 @@ Thumbs.db
 *.log
 frontend/dist/
 *.tsbuildinfo
-
-# Render
-render.yaml

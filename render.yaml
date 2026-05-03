@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: stock-analyzer
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: gunicorn main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --chdir backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stock-analyzer-db
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: https://stock-analyzer.vercel.app,http://localhost:5173,http://localhost:3000
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: AKSHARE_TIMEOUT
+        value: "60"
+
+databases:
+  - name: stock-analyzer-db
+    plan: free
+    region: singapore
+    databaseName: stock_analyzer
+    ipAllowList: []
