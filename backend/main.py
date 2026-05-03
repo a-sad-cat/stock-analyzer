@@ -13,6 +13,22 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+# --- 日志配置 ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+
+# 禁用 AKShare 的 tqdm 进度条
+os.environ["TQDM_DISABLE"] = "1"
+# 禁用 AKShare 控制台日志
+try:
+    import akshare as ak
+    ak.console_logger.setLevel(logging.WARNING)
+except Exception:
+    pass
+
 from routers import stocks, strategies, sectors, backtest
 from database import engine, Base
 from services.data_service import _get_spot_map
@@ -20,6 +36,10 @@ from services.sector_service import refresh_sectors, rebuild_sector_map, build_s
 from models.backtest import BacktestRun, BacktestTrade  # noqa: F401 确保回测表被创建
 
 logger = logging.getLogger(__name__)
+logger.info("=" * 50)
+logger.info("stock-analyzer 后端启动中...")
+logger.info("AKShare 后台预热可能需要 30-60 秒")
+logger.info("=" * 50)
 
 # --- 创建数据库表 ---
 Base.metadata.create_all(bind=engine)
