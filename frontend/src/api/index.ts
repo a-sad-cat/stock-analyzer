@@ -12,6 +12,8 @@ const api = axios.create({
 
 // ---------- 前端缓存 ----------
 const requestCache = new Map<string, { data: any; timestamp: number }>()
+const inFlight = new Map<string, Promise<any>>()
+const MAX_CACHE_SIZE = 50
 const DEFAULT_TTL = 120_000 // 2 分钟
 
 export function clearApiCache(key?: string) {
@@ -22,14 +24,31 @@ export function clearApiCache(key?: string) {
   }
 }
 
+function evictIfNeeded() {
+  if (requestCache.size <= MAX_CACHE_SIZE) return
+  const oldest = [...requestCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp)
+  for (let i = 0; i < 20 && i < oldest.length; i++) {
+    requestCache.delete(oldest[i][0])
+  }
+}
+
 async function withCache<T>(key: string, fn: () => Promise<T>, ttl = DEFAULT_TTL): Promise<T> {
   const cached = requestCache.get(key)
   if (cached && Date.now() - cached.timestamp < ttl) {
     return cached.data as T
   }
-  const data = await fn()
-  requestCache.set(key, { data, timestamp: Date.now() })
-  return data
+  // 并发请求去重：如果同一个 key 正在请求中，复用同一个 Promise
+  const pending = inFlight.get(key)
+  if (pending) return pending
+  const promise = fn().then((data) => {
+    evictIfNeeded()
+    requestCache.set(key, { data, timestamp: Date.now() })
+    return data
+  }).finally(() => {
+    inFlight.delete(key)
+  })
+  inFlight.set(key, promise)
+  return promise
 }
 
 // ---------- 股票相关 API ----------

@@ -46,19 +46,15 @@ def prefetch_all_stock_data():
 
 
 def run_scheduled_scan():
-    """定时全市场扫描：先刷新数据，再运行所有策略"""
+    """定时全市场扫描：运行所有策略（数据由 get_daily_data 按需拉取+DB缓存）"""
     from database import SessionLocal
     from strategies.engine import run_all_strategies
     from config import TOP_K_RESULTS
 
     logger.info("=" * 50)
-    logger.info("定时任务：开始全市场数据刷新 + 策略扫描")
+    logger.info("定时任务：开始全市场策略扫描")
     logger.info("=" * 50)
 
-    # 1. 预取数据到本地缓存
-    prefetch_all_stock_data()
-
-    # 2. 全量扫描（走 DB 缓存，比直接调 AKShare 快很多）
     db = SessionLocal()
     try:
         results = run_all_strategies(db, stock_limit=0)

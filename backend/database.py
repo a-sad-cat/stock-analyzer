@@ -52,6 +52,10 @@ def _init_db():
                     strategy_cols = [r[1] for r in conn.execute("PRAGMA table_info(strategies)").fetchall()]
                     if 'sort_order' not in strategy_cols:
                         conn.execute("ALTER TABLE strategies ADD COLUMN sort_order INTEGER DEFAULT 0")
+                if 'strategy_results' in tables:
+                    indexes_all = [r[1] for r in conn.execute("PRAGMA index_list(strategy_results)").fetchall()]
+                    if 'ix_strategy_results_created_at' not in indexes_all:
+                        conn.execute("CREATE INDEX IF NOT EXISTS ix_strategy_results_created_at ON strategy_results(created_at)")
     except Exception:
         pass
 

@@ -41,4 +41,4 @@ class StrategyResult(Base):
     score = Column(Float, default=0, comment="匹配评分(0-100)")
     signals = Column(JSON, default=dict, comment="关键信号值（JSON）")
     reason = Column(Text, default="", comment="匹配原因描述")
-    created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
+    created_at = Column(DateTime, server_default=func.now(), index=True, comment="创建时间")

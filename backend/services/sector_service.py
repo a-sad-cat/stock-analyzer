@@ -531,6 +531,14 @@ def get_sector_detail(sector_name: str, sector_type: str) -> dict | None:
     codes = get_sector_stocks(sector_name, sector_type)
     sector["stocks"] = codes
 
+    # 检查 K 线缓存
+    kline_key = f"kline:{sector_name}:{sector_type}"
+    now = time.time()
+    cached = _cache_detail.get(kline_key)
+    if cached and now - cached.get("time", 0) < DETAIL_TTL:
+        sector["kline"] = cached.get("data", [])
+        return sector
+
     try:
         import akshare as ak
         if sector_type == "concept":
@@ -549,6 +557,7 @@ def get_sector_detail(sector_name: str, sector_type: str) -> dict | None:
                 "pct_chg": round(float(row.get("涨跌幅", 0)), 2),
             })
         sector["kline"] = kline
+        _cache_detail[kline_key] = {"data": kline, "time": now}
     except Exception:
         # EM K线不可用，尝试用成分股平均K线替代（仅行业板块）
         if sector_type == "industry" and codes:

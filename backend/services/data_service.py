@@ -19,6 +19,9 @@ from database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
+# 进程生命周期内仅执行一次的市场修复标志
+_repair_done = False
+
 
 # ---------- 缓存检查 ----------
 def _need_refresh(db: Session, code: str, days: int = 60) -> bool:
@@ -113,7 +116,10 @@ def _fix_market_from_code(raw_code: str) -> str:
 
 
 def repair_stock_market(db: Session):
-    """修复数据库中代码前缀错误 + 市场分类错误"""
+    """修复数据库中代码前缀错误 + 市场分类错误（仅首次调用执行）"""
+    global _repair_done
+    if _repair_done:
+        return
     from models.stock import StockDaily
     stocks = db.query(Stock).all()
     code_fixed = 0
@@ -138,6 +144,7 @@ def repair_stock_market(db: Session):
             logger.info(f"修复 {code_fixed} 只股票的代码前缀")
         if market_fixed:
             logger.info(f"修复 {market_fixed} 只股票的市场分类")
+    _repair_done = True
 
 
 def get_all_stocks(db: Session = None) -> list[dict]:
@@ -154,7 +161,8 @@ def get_all_stocks(db: Session = None) -> list[dict]:
         # 先从本地数据库获取
         stocks = db.query(Stock).all()
         if stocks and len(stocks) > 1000:
-            repair_stock_market(db)
+            if not _repair_done:
+                repair_stock_market(db)
             return [{"code": s.code, "name": s.name, "market": s.market, "industry": s.industry} for s in stocks]
 
         # 本地没有，从 AKShare（新浪数据源）获取
@@ -251,7 +259,9 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
                 # 如果 DB 里有缓存指标，跳过重新计算
                 if 'MA5' in data:
                     return df_result
-                return _add_technical_indicators(df_result)
+                df_result = _add_technical_indicators(df_result)
+                _save_daily_data(db, code, df_result.reset_index())
+                return df_result
 
         import akshare as ak
 
@@ -452,6 +462,9 @@ def _get_spot_map(allow_fetch=True) -> dict:
             _spot_cache[bare_code] = {
                 'close': round(float(row.get('最新价', 0)), 2),
                 'pct_chg': round(float(row.get('涨跌幅', 0)), 2),
+                'turnover_rate': round(float(row.get('换手率', 0) or 0), 2),
+                'pe_ttm': round(float(row.get('市盈率-动态', 0) or 0), 2),
+                'market_cap': float(row.get('总市值', 0) or 0),
             }
         _spot_cache_time = now
     except Exception:
@@ -495,6 +508,10 @@ def get_stock_detail(code: str) -> dict:
     finally:
         db.close()
 
+    # 实时行情（换手率、市盈率、总市值）
+    spot_map = _get_spot_map(allow_fetch=False)
+    spot = spot_map.get(code, {})
+
     # K线数据
     df = get_daily_data(code)
     if df.empty:
@@ -522,6 +539,7 @@ def get_stock_detail(code: str) -> dict:
             'low': round(float(row['low']), 2),
             'close': round(float(row['close']), 2),
             'volume': float(row['volume']),
+            'amount': float(row['amount']) if pd.notna(row.get('amount')) else 0,
             'pct_chg': round(float(row['pct_chg']), 2) if pd.notna(row.get('pct_chg')) else 0,
         }
         for col in ['MA5', 'MA10', 'MA20', 'MA60', 'DIF', 'DEA', 'MACD', 'RSI', 'K', 'D', 'J',
@@ -540,6 +558,9 @@ def get_stock_detail(code: str) -> dict:
             "pct_chg": round(float(latest['pct_chg']), 2) if pd.notna(latest.get('pct_chg')) else 0,
             "volume": float(latest['volume']),
             "amount": float(latest['amount']),
+            "turnover_rate": spot.get('turnover_rate'),
+            "pe_ttm": spot.get('pe_ttm'),
+            "market_cap": spot.get('market_cap'),
             **signals,
         },
         "kline": kline_data,
