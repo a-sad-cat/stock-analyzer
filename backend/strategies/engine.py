@@ -381,6 +381,15 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 0, top_k: int
     if before_filter != len(all_stocks):
         logger.info(f"过滤掉 {before_filter - len(all_stocks)} 只 ST/*ST 股票")
 
+    before_filter = len(all_stocks)
+    all_stocks = [
+        s for s in all_stocks
+        if s.get('market', 'SH') in ('SH', 'SZ')
+    ]
+    filtered = before_filter - len(all_stocks)
+    if filtered:
+        logger.info(f"过滤掉 {filtered} 只北交所股票（仅扫描沪市+深市）")
+
     if strategy.type == "builtin" and strategy.id in _builtin_strategies:
         strategy_obj = _builtin_strategies[strategy.id]
     elif strategy.type == "custom":
