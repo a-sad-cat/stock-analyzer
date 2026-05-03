@@ -36,3 +36,6 @@ Thumbs.db
 # Build artifacts
 *.log
 *.tsbuildinfo
+
+# Render (阿里云分支不需要)
+render.yaml

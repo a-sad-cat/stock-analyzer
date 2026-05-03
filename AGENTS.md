@@ -43,33 +43,38 @@ See `PROJECT.md` for full API reference, strategy list, and data flow.
 - No lint, formatter, or typecheck config for backend. Frontend typecheck is part of `npm run build`.
 - No tests anywhere in the repo.
 
-## Deployment (mobile/cloud)
+## Deployment
 
-Two free services required: **Render** (backend) + **Vercel** (frontend).
+Two options (mutually exclusive, pick one):
 
-### Step 1: Render - deploy backend
+### Option A: Render + Vercel (免费用，海外访问快)
 
-1. Go to https://dashboard.render.com → **New +** → **Blueprint**
-2. Connect `a-sad-cat/stock-analyzer` repo
-3. Render auto-reads `render.yaml`, creates Web Service + PostgreSQL
-4. Get backend URL: `https://stock-analyzer.onrender.com`
-5. Update `frontend/vercel.json` rewrite destination with this URL
+1. Render: Go to https://dashboard.render.com → **New +** → **Blueprint**, connect repo
+2. Vercel: Import repo, Root Directory = `frontend`
+3. On Render, set `CORS_ORIGINS` env var
 
-### Step 2: Vercel - deploy frontend
+### Option B: 阿里云轻量服务器（推荐，国内速度快）
 
-1. Go to https://vercel.com → **Add New Project** → Import `a-sad-cat/stock-analyzer`
-2. Configure:
-   - **Root Directory**: `frontend`
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-3. Add env var `VITE_API_BASE_URL` = Render backend URL (optional, uses vercel.json rewrites otherwise)
-4. Deploy → get URL like `stock-analyzer.vercel.app`
+```bash
+# 1. 服务器上安装 Python
+apt update && apt install -y python3 python3-pip python3-venv git
 
-### Step 3: update CORS
+# 2. 克隆代码
+git clone -b deploy/aliyun https://github.com/a-sad-cat/stock-analyzer.git
+cd stock-analyzer
 
-In Render dashboard → Environment → add `CORS_ORIGINS`:
-```
-https://stock-analyzer.vercel.app,http://localhost:5173,http://localhost:3000
+# 3. 一键部署
+bash scripts/deploy.sh
+
+# 4. （推荐）安装为系统服务，后台运行 + 开机自启
+cp scripts/stock-analyzer.service /etc/systemd/system/
+systemctl enable stock-analyzer
+systemctl start stock-analyzer
+
+# 5. 防火墙开放 8000 端口
+#    阿里云控制台 → 安全组 → 添加规则: 允许 TCP 8000
+
+# 6. 访问 http://<服务器IP>:8000
 ```
 
 ## Notable quirks
