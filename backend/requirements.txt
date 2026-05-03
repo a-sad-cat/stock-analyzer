@@ -6,6 +6,7 @@
 
 fastapi>=0.110.0          # Web 框架
 uvicorn>=0.29.0            # ASGI 服务器
+gunicorn>=22.0.0           # WSGI 服务器（生产部署）
 akshare>=1.14.0            # A股数据源（免费）
 pandas>=2.0.0              # 数据处理
 numpy>=1.24.0              # 数值计算
@@ -13,3 +14,4 @@ pandas-ta>=0.3.14b0        # 技术指标计算（纯Python，替代ta-lib）
 sqlalchemy>=2.0.0          # ORM 数据库操作
 httpx>=0.27.0              # HTTP 请求客户端
 pydantic>=2.0.0            # 数据校验
+psycopg2-binary>=2.9.9     # PostgreSQL 驱动（生产环境）

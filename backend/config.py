@@ -1,6 +1,7 @@
 """
 # ========================================
 # 配置文件
+# 支持 SQLite（本地开发）和 PostgreSQL（生产环境）
 # ========================================
 """
 
@@ -9,10 +10,16 @@ import os
 # 项目根路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 数据库路径（SQLite 文件）
-DATABASE_PATH = os.path.join(BASE_DIR, "stock_analyzer.db")
-# 使用同步 SQLite（aiosqlite 用于异步，但这里用同步引擎 + check_same_thread）
-DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+# 数据库：优先使用环境变量 DATABASE_URL（Render PostgreSQL）
+# 如果没有设置，则使用本地 SQLite 文件
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    DATABASE_PATH = os.path.join(BASE_DIR, "stock_analyzer.db")
+    DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+
+# Render 的 PostgreSQL 连接串是 postgres:// 开头，SQLAlchemy 需要 postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # AKShare 请求超时（秒）
 AKSHARE_TIMEOUT = 30

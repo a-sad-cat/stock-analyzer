@@ -28,10 +28,14 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# --- 跨域配置（允许前端开发服务器访问） ---
+# --- 跨域配置 ---
+# 允许本地开发 + Vercel 生产域名
+# 生产环境下通过 CORS_ORIGINS 环境变量配置
+import os
+_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[o.strip() for o in _cors_origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

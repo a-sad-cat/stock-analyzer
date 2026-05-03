@@ -1,7 +1,7 @@
 """
 # ========================================
-# 数据库配置（SQLite）
-# 使用 SQLAlchemy ORM 操作数据库
+# 数据库配置
+# 支持 SQLite（本地开发）和 PostgreSQL（生产环境）
 # ========================================
 """
 
@@ -11,9 +11,12 @@ from sqlalchemy.orm import sessionmaker
 
 from config import DATABASE_URL
 
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+connect_args = {"check_same_thread": False} if _is_sqlite else {}
+
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    connect_args=connect_args,
     pool_size=10,
     max_overflow=20,
     echo=False,
@@ -21,13 +24,14 @@ engine = create_engine(
 
 
 def _init_db():
-    """启动时执行：WAL 模式 + 列迁移"""
+    """SQLite 特有初始化：WAL 模式 + 列迁移"""
+    if not _is_sqlite:
+        return
     try:
         with engine.raw_connection() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("PRAGMA cache_size=-8000")
-            # 检查表是否存在
             tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
             if 'stock_daily' in tables:
                 cols = [r[1] for r in conn.execute("PRAGMA table_info(stock_daily)").fetchall()]
@@ -40,11 +44,9 @@ def _init_db():
                 for col_name, col_type in new_cols:
                     if col_name not in cols:
                         conn.execute(f"ALTER TABLE stock_daily ADD COLUMN {col_name} {col_type}")
-                # 创建复合索引（如果不存在）
                 indexes = [r[1] for r in conn.execute("PRAGMA index_list(stock_daily)").fetchall()]
                 if 'idx_code_date' not in indexes:
                     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_code_date ON stock_daily(code, date)")
-                # strategies 表列迁移
                 if 'strategies' in tables:
                     strategy_cols = [r[1] for r in conn.execute("PRAGMA table_info(strategies)").fetchall()]
                     if 'sort_order' not in strategy_cols:
