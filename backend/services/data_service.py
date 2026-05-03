@@ -90,12 +90,20 @@ def _save_daily_data(db: Session, code: str, df: pd.DataFrame):
 
 
 # ---------- 公开接口 ----------
-def _fix_market_from_code(raw_code: str) -> str:
-    """从股票代码判断正确市场（修复 DB 中存错的 market 字段）"""
+def _strip_code_prefix(raw_code: str) -> str:
+    """去掉代码中的 sh/sz/bj 前缀，返回纯数字代码"""
     raw = str(raw_code).lower()
-    for prefix, market in [('sh', 'SH'), ('sz', 'SZ'), ('bj', 'BJ')]:
+    for prefix in ('sh', 'sz', 'bj'):
         if raw.startswith(prefix):
-            return market
+            return raw[len(prefix):]
+    return raw_code
+
+
+def _fix_market_from_code(raw_code: str) -> str:
+    """从股票代码判断正确市场"""
+    raw = _strip_code_prefix(raw_code)
+    if raw.startswith('92'):
+        return 'BJ'
     first = raw[0] if raw else ''
     if first in ('6', '9'):
         return 'SH'
@@ -105,17 +113,31 @@ def _fix_market_from_code(raw_code: str) -> str:
 
 
 def repair_stock_market(db: Session):
-    """修复数据库中市场分类错误的股票"""
+    """修复数据库中代码前缀错误 + 市场分类错误"""
+    from models.stock import StockDaily
     stocks = db.query(Stock).all()
-    fixed = 0
+    code_fixed = 0
+    market_fixed = 0
     for s in stocks:
-        correct = _fix_market_from_code(s.code)
+        old_code = s.code
+        new_code = _strip_code_prefix(old_code)
+        if old_code != new_code:
+            # 修复 StockDaily.code
+            db.query(StockDaily).filter(StockDaily.code == old_code).update(
+                {StockDaily.code: new_code}, synchronize_session=False
+            )
+            s.code = new_code
+            code_fixed += 1
+        correct = _fix_market_from_code(new_code)
         if s.market != correct:
             s.market = correct
-            fixed += 1
-    if fixed:
+            market_fixed += 1
+    if code_fixed or market_fixed:
         db.commit()
-        logger.info(f"修复 {fixed} 只股票的市场分类")
+        if code_fixed:
+            logger.info(f"修复 {code_fixed} 只股票的代码前缀")
+        if market_fixed:
+            logger.info(f"修复 {market_fixed} 只股票的市场分类")
 
 
 def get_all_stocks(db: Session = None) -> list[dict]:
@@ -153,6 +175,8 @@ def get_all_stocks(db: Session = None) -> list[dict]:
                 if raw.startswith(prefix):
                     return raw[len(prefix):].zfill(6), market
             first = raw[0]
+            if raw.startswith('92'):
+                return raw.zfill(6), 'BJ'
             if first in ('6', '9'):
                 return raw.zfill(6), 'SH'
             if first in ('0', '3', '2'):

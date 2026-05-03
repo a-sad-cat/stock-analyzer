@@ -384,7 +384,7 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 0, top_k: int
     before_filter = len(all_stocks)
     all_stocks = [
         s for s in all_stocks
-        if not s.get('code', '').startswith(('4', '8', '92'))
+        if not s.get('code', '').lower().startswith(('4', '8', '92', 'bj'))
     ]
     filtered = before_filter - len(all_stocks)
     if filtered:
