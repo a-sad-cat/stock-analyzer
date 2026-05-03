@@ -91,8 +91,8 @@ export const deleteStrategy = async (id: number) => {
 }
 
 /** 运行单个策略 */
-export const runStrategy = async (id: number, limit: number = 200) => {
-  const res = await api.post(`/strategies/${id}/run`, null, { params: { limit }, timeout: 120000 })
+export const runStrategy = async (id: number, limit: number = 0, top_k: number = 50) => {
+  const res = await api.post(`/strategies/${id}/run`, null, { params: { limit, top_k }, timeout: 120000 })
   return res.data
 }
 
@@ -103,8 +103,8 @@ export const toggleStrategy = async (id: number) => {
 }
 
 /** 运行所有策略 */
-export const runAllStrategies = async (limit: number = 200) => {
-  const res = await api.post('/strategies/run-all', null, { params: { limit }, timeout: 300000 })
+export const runAllStrategies = async (limit: number = 0, top_k: number = 50) => {
+  const res = await api.post('/strategies/run-all', null, { params: { limit, top_k }, timeout: 300000 })
   return res.data
 }
 

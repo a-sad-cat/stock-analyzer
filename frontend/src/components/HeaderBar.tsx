@@ -42,7 +42,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({ onToggleMenu }) => {
   const handleQuickScan = async () => {
     setIsRunning(true)
     try {
-      const result = await runAllStrategies(200)
+      const result = await runAllStrategies(0)
       const total = result.total_matched || 0
       setRunCount(total)
       setLastRun(dayjs().format('HH:mm:ss'))
