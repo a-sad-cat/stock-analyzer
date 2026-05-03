@@ -24,6 +24,4 @@ nohup uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > ../app.log 2>&1 
 
 echo ">>> 等待启动..."
 sleep 3
-tail -5 ../app.log
-echo ""
-echo ">>> 完成！访问 http://$(curl -s ifconfig.me 2>/dev/null || echo '<服务器IP>'):8000"
+tail -n 20 -f ../app.log
