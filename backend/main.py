@@ -9,9 +9,11 @@ import logging
 import threading
 import os
 from pathlib import Path
-from fastapi import FastAPI
+import time
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # --- 日志配置 ---
 logging.basicConfig(
@@ -61,6 +63,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- 请求日志中间件 ---
+class RequestLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = time.time()
+        response = await call_next(request)
+        cost = round((time.time() - start) * 1000)
+        if request.url.path.startswith("/api/"):
+            logger.info(f"{request.method} {request.url.path} -> {response.status_code} ({cost}ms)")
+        return response
+
+app.add_middleware(RequestLogMiddleware)
 
 # --- 注册路由 ---
 app.include_router(stocks.router, prefix="/api/stocks", tags=["股票数据"])
