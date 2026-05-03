@@ -7,8 +7,11 @@
 
 import logging
 import threading
+import os
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from routers import stocks, strategies, sectors, backtest
 from database import engine, Base
@@ -29,9 +32,7 @@ app = FastAPI(
 )
 
 # --- 跨域配置 ---
-# 允许本地开发 + Vercel 生产域名
-# 生产环境下通过 CORS_ORIGINS 环境变量配置
-import os
+# 本地开发时需要跨域，生产环境同源不需要
 _cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
@@ -82,13 +83,14 @@ threading.Thread(target=_warm_sector_map, daemon=True).start()
 threading.Thread(target=build_stock_sectors_map, daemon=True).start()
 
 
-@app.get("/")
-def root():
-    """根路径，检查服务是否正常"""
-    return {"message": "stock-analyzer 服务运行中", "status": "ok"}
-
-
 @app.get("/api/health")
 def health_check():
     """健康检查接口"""
     return {"status": "healthy"}
+
+
+# --- 托管前端静态文件 ---
+# API 路由会优先匹配，其余路径由前端 SPA 处理
+_frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")

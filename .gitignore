@@ -18,7 +18,6 @@ env/
 
 # Node
 node_modules/
-frontend/dist/
 
 # IDE
 .idea/
@@ -36,5 +35,4 @@ Thumbs.db
 
 # Build artifacts
 *.log
-frontend/dist/
 *.tsbuildinfo

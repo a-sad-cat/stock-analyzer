@@ -13,7 +13,7 @@ services:
           name: stock-analyzer-db
           property: connectionString
       - key: CORS_ORIGINS
-        value: https://stock-analyzer.vercel.app,http://localhost:5173,http://localhost:3000
+        value: http://localhost:5173,http://localhost:3000
       - key: PYTHON_VERSION
         value: 3.12
       - key: AKSHARE_TIMEOUT
