@@ -134,7 +134,12 @@ def get_all_stocks(db: Session = None) -> list[dict]:
 
         # 保存到数据库
         for _, row in df.iterrows():
-            code = str(row['code']).zfill(6)
+            raw = str(row['code']).lower()
+            for prefix in ('sh', 'sz', 'bj'):
+                if raw.startswith(prefix):
+                    raw = raw[len(prefix):]
+                    break
+            code = raw.zfill(6)
             existing = db.query(Stock).filter(Stock.code == code).first()
             if not existing:
                 stock = Stock(
@@ -199,22 +204,52 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
                 return _add_technical_indicators(df_result)
 
         import akshare as ak
+
+        # 清除代码中已有的 sh/sz/bj 前缀（AKShare 某些版本会带前缀）
+        bare_code = code.lower()
+        for prefix in ('sh', 'sz', 'bj'):
+            if bare_code.startswith(prefix):
+                bare_code = bare_code[len(prefix):]
+                break
+
         logger.info(f"从 AKShare 获取 {code} 的日K数据...")
         time.sleep(0.3)
 
-        if code.startswith(('6', '9')):
+        # 检查数据库中存储的市场信息
+        try:
+            stock = db.query(Stock).filter(Stock.code == code).first()
+            db_market = stock.market.lower() if stock and stock.market else ''
+        except Exception:
+            db_market = ''
+
+        if db_market == 'sh':
             market_prefix = 'sh'
-        elif code.startswith(('0', '3', '2')):
+        elif db_market == 'sz':
+            market_prefix = 'sz'
+        elif db_market == 'bj':
+            market_prefix = 'bj'
+        elif bare_code.startswith(('6', '9')):
+            market_prefix = 'sh'
+        elif bare_code.startswith(('0', '3', '2')):
             market_prefix = 'sz'
         else:
             market_prefix = 'bj'
 
         try:
-            df = ak.stock_zh_a_daily(symbol=f"{market_prefix}{code}",
+            df = ak.stock_zh_a_daily(symbol=f"{market_prefix}{bare_code}",
                                      start_date=start_date, end_date=end_date)
         except Exception as e:
             logger.warning(f"获取 {code} 数据失败: {e}")
-            return pd.DataFrame()
+
+            if market_prefix != 'sz':
+                try:
+                    df = ak.stock_zh_a_daily(symbol=f"sz{bare_code}",
+                                             start_date=start_date, end_date=end_date)
+                    logger.info(f"  → 降级到 sz 前缀成功")
+                except Exception:
+                    return pd.DataFrame()
+            else:
+                return pd.DataFrame()
 
         if df is None or df.empty:
             return pd.DataFrame()
@@ -223,6 +258,9 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
             'Date': 'date', 'Open': 'open', 'Close': 'close',
             'High': 'high', 'Low': 'low', 'Volume': 'volume', 'Amount': 'amount',
         })
+        if 'date' not in df.columns:
+            logger.warning(f"{code} 返回数据缺少 date 列")
+            return pd.DataFrame()
         df['date'] = pd.to_datetime(df['date']).dt.date
         if 'pct_chg' not in df.columns:
             df['pct_chg'] = df['close'].pct_change() * 100
