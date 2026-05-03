@@ -2,13 +2,15 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
 *.egg
 
 # Virtual environment
 venv/
 .venv/
 env/
+
+# Python build output (if any)
+/dist/
 
 # Database
 *.db
