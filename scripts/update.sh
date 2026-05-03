@@ -18,7 +18,9 @@ git remote set-url origin https://github.com/a-sad-cat/stock-analyzer.git
 
 echo ">>> 重启服务..."
 source venv/bin/activate
-kill $(lsof -t -i:8000) 2>/dev/null || true
+fuser -k 8000/tcp 2>/dev/null || true
+sleep 2
+
 cd backend
 nohup uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2 > ../app.log 2>&1 &
 
