@@ -19,6 +19,7 @@ engine = create_engine(
     connect_args=connect_args,
     pool_size=10,
     max_overflow=20,
+    pool_pre_ping=True,  # 连接复用前检查是否有效，避免 SSL 断连
     echo=False,
 )
 

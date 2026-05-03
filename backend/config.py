@@ -20,6 +20,9 @@ if not DATABASE_URL:
 # Render 的 PostgreSQL 连接串是 postgres:// 开头，SQLAlchemy 需要 postgresql://
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# 确保 SSL 模式
+if "sslmode" not in DATABASE_URL and not DATABASE_URL.startswith("sqlite"):
+    DATABASE_URL += "?sslmode=require" if "?" not in DATABASE_URL else "&sslmode=require"
 
 # AKShare 请求超时（秒）
 AKSHARE_TIMEOUT = 30
