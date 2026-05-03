@@ -25,22 +25,6 @@ const tabs = [
     ),
   },
   {
-    key: '/sectors',
-    label: '板块',
-    icon: (active: boolean, color: string) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <rect x="3" y="3" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
-          fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
-        <rect x="14" y="3" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
-          fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
-        <rect x="3" y="14" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
-          fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
-        <rect x="14" y="14" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
-          fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
-      </svg>
-    ),
-  },
-  {
     key: '/strategies',
     label: '策略',
     icon: (active: boolean, color: string) => (
@@ -58,6 +42,22 @@ const tabs = [
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke={color} strokeWidth="1.6"
           strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      </svg>
+    ),
+  },
+  {
+    key: '/sectors',
+    label: '板块',
+    icon: (active: boolean, color: string) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="3" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
+          fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
+        <rect x="14" y="3" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
+          fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
+        <rect x="3" y="14" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
+          fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
+        <rect x="14" y="14" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
+          fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
       </svg>
     ),
   },
@@ -80,7 +80,7 @@ const MobileTabs: React.FC = () => {
       className="safe-bottom"
       style={{
         position: 'fixed',
-        bottom: 0,
+        bottom: 6,
         left: 0,
         right: 0,
         height: 64,

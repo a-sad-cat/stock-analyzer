@@ -270,7 +270,7 @@ const StockSearch: React.FC = () => {
                 ))}
               </div>
 
-              <motion.div key={chartTab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-box" style={{ padding: '8px 4px', marginBottom: 10 }}>
+              <motion.div key={chartTab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-box" style={{ padding: '8px 4px', marginBottom: 10, touchAction: 'pan-x pinch-zoom' }}>
                 <ReactECharts
                   option={chartOptions[chartTab]}
                   style={{ height: fullScreen ? 280 : 220 }}
@@ -282,10 +282,10 @@ const StockSearch: React.FC = () => {
               {fullScreen && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 10 }}>
-                    <div className="chart-box" style={{ padding: '4px' }}>
+                    <div className="chart-box" style={{ padding: '4px', touchAction: 'pan-x pinch-zoom' }}>
                       <ReactECharts option={mobileMacdOption(kd)} style={{ height: 160 }} notMerge />
                     </div>
-                    <div className="chart-box" style={{ padding: '4px' }}>
+                    <div className="chart-box" style={{ padding: '4px', touchAction: 'pan-x pinch-zoom' }}>
                       <ReactECharts option={mobileRsiOption(kd)} style={{ height: 160 }} notMerge />
                     </div>
                   </div>

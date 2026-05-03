@@ -233,7 +233,7 @@ const StockDetail: React.FC = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="chart-box"
-        style={{ padding: '8px 4px', marginBottom: 12 }}
+        style={{ padding: '8px 4px', marginBottom: 12, touchAction: 'pan-x pinch-zoom' }}
       >
         <ReactECharts
           option={chartOptions[chartTab]}

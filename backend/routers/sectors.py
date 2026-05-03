@@ -52,7 +52,7 @@ def api_sector_heatmap(sector_type: str = Query("", description="过滤: concept
             "stock_count": s.get("stock_count", 0),
         })
 
-    result.sort(key=lambda x: x["heat_score"], reverse=True)
+    result.sort(key=lambda x: x["pct_chg"], reverse=True)
     return {"sectors": result, "total": len(result)}
 
 
