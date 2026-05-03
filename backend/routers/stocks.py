@@ -6,6 +6,7 @@
 """
 
 import logging
+import time
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -153,13 +154,20 @@ def api_stock_kline(code: str, days: int = Query(60, ge=10, le=365, description=
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# 行情数据缓存（盘中30秒刷新，避免每次请求都等AKShare）
+_quotes_cache: dict = {"data": None, "time": 0}
+_QUOTES_TTL = 30  # 30秒缓存
+
 @router.get("/market/quotes")
 def api_market_quotes():
     """获取实时行情（大盘+个股概览）"""
+    now = time.time()
+    if _quotes_cache["data"] and now - _quotes_cache["time"] < _QUOTES_TTL:
+        return _quotes_cache["data"]
+
     try:
         import akshare as ak
 
-        # 使用新浪源获取指数实时行情（一次调用获取所有指数）
         try:
             index_df = ak.stock_zh_index_spot_sina()
             target_codes = {"sh000001": "上证指数", "sz399001": "深证成指", "sz399006": "创业板指"}
@@ -176,7 +184,10 @@ def api_market_quotes():
             logger.warning(f"获取指数行情失败: {e}")
             indices = []
 
-        return {"indices": indices}
+        result = {"indices": indices}
+        _quotes_cache["data"] = result
+        _quotes_cache["time"] = now
+        return result
     except Exception as e:
         logger.error(f"获取行情失败: {e}")
         return {"indices": []}

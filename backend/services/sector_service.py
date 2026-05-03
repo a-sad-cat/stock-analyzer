@@ -19,8 +19,8 @@ _sector_map = {"stock_to_sectors": {}, "sector_to_stocks": {}, "last_build": 0}
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECTOR_MAP_PATH = os.path.join(BASE_DIR, "data", "sector_map.json")
 
-SECTOR_TTL = 60        # 板块列表缓存 60 秒（盘中实时）
-DETAIL_TTL = 60        # 板块详情缓存 60 秒
+SECTOR_TTL = 300       # 板块列表缓存 5 分钟（新加坡到同花顺慢，减少重复请求）
+DETAIL_TTL = 300       # 板块详情缓存 5 分钟
 STOCK_MAP_TTL = 86400  # 成分股映射缓存 24 小时
 CAPITAL_FLOW_TTL = 60  # 资金流向缓存 60 秒
 
