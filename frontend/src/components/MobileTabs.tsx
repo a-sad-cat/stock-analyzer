@@ -80,7 +80,8 @@ const MobileTabs: React.FC = () => {
       className="safe-bottom"
       style={{
         position: 'fixed',
-        bottom: 6,
+        bottom: 0,
+        paddingBottom: 6,
         left: 0,
         right: 0,
         height: 64,

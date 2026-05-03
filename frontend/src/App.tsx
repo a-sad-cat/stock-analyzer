@@ -39,7 +39,7 @@ const App: React.FC = () => {
         style={{
           margin: '0 12px',
           marginTop: 12,
-          paddingBottom: TAB_HEIGHT + 16,
+          paddingBottom: TAB_HEIGHT + 22,
           paddingTop: 48,
         }}
       >
