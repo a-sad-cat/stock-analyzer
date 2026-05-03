@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Layout, Drawer } from 'antd'
+import { MenuOutlined } from '@ant-design/icons'
 import AppRouter from './router'
 import Sidebar from './components/Sidebar'
 import HeaderBar from './components/HeaderBar'
+import MobileTabs from './components/MobileTabs'
 import { useAppStore } from './stores/useAppStore'
 
 const { Content, Sider } = Layout
@@ -21,6 +23,7 @@ const App: React.FC = () => {
   }, [])
 
   const siderWidth = collapsed ? 80 : 220
+  const TAB_BAR_HEIGHT = isMobile ? 56 : 0
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -47,7 +50,10 @@ const App: React.FC = () => {
         </Sider>
       )}
 
-      {/* 移动端抽屉导航 */}
+      {/* 移动端底部导航 */}
+      {isMobile && <MobileTabs />}
+
+      {/* 移动端抽屉（回测等次要页面） */}
       <Drawer
         placement="left"
         closable={false}
@@ -61,11 +67,12 @@ const App: React.FC = () => {
 
       {/* 主内容区 */}
       <Layout style={{ marginLeft: isMobile ? 0 : siderWidth }}>
-        <HeaderBar onToggleMenu={() => setDrawerOpen(!drawerOpen)} />
+        <HeaderBar onMoreClick={() => setDrawerOpen(!drawerOpen)} />
         <Content
           style={{
             margin: isMobile ? 12 : 24,
             minHeight: 'calc(100vh - 88px)',
+            paddingBottom: TAB_BAR_HEIGHT + 12,
           }}
         >
           <AppRouter />

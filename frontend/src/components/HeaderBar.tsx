@@ -3,28 +3,24 @@ import { Layout, Badge, Space, Typography, Spin, Tooltip, Button } from 'antd'
 import {
   SyncOutlined,
   ClockCircleOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
+  MenuOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { useAppStore } from '../stores/useAppStore'
 import { runAllStrategies } from '../api'
 
 const { Header } = Layout
 const { Text } = Typography
 
 interface HeaderBarProps {
-  onToggleMenu: () => void
+  onMoreClick: () => void
 }
 
-const HeaderBar: React.FC<HeaderBarProps> = ({ onToggleMenu }) => {
+const HeaderBar: React.FC<HeaderBarProps> = ({ onMoreClick }) => {
   const [currentTime, setCurrentTime] = useState(dayjs().format('HH:mm:ss'))
   const [isRunning, setIsRunning] = useState(false)
   const [lastRun, setLastRun] = useState<string | null>(null)
   const [runCount, setRunCount] = useState(0)
   const [isMobile, setIsMobile] = useState(window.innerWidth < 992)
-  const collapsed = useAppStore((s) => s.collapsed)
-  const toggleCollapsed = useAppStore((s) => s.toggleCollapsed)
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 992)
@@ -57,39 +53,24 @@ const HeaderBar: React.FC<HeaderBarProps> = ({ onToggleMenu }) => {
     <Header
       style={{
         background: '#fff',
-        padding: isMobile ? '0 12px' : '0 24px',
+        padding: isMobile ? '0 8px' : '0 24px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottom: '1px solid #f0f0f0',
-        height: 64,
+        height: 56,
         position: 'sticky',
         top: 0,
         zIndex: 99,
       }}
     >
-      {/* 左侧：菜单按钮 + 标题 */}
-      <Space>
-        <Button
-          type="text"
-          icon={collapsed || isMobile ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          onClick={() => { if (isMobile) onToggleMenu(); else toggleCollapsed() }}
-          style={{ fontSize: 18, width: 40, height: 40 }}
-        />
-        {!isMobile && (
-          <Text strong style={{ fontSize: 16 }}>
-            📊 A股短线策略分析工具
-          </Text>
-        )}
-        {isMobile && (
-          <Text strong style={{ fontSize: 15 }}>
-            股票分析
-          </Text>
-        )}
-      </Space>
+      {/* 左侧：标题 */}
+      <Text strong style={{ fontSize: isMobile ? 16 : 17 }}>
+        {isMobile ? '股票分析' : '📊 A股短线策略分析工具'}
+      </Text>
 
-      {/* 右侧：状态 */}
-      <Space size={isMobile ? "small" : "large"}>
+      {/* 右侧 */}
+      <Space size={isMobile ? 4 : "large"}>
         {!isRunning && lastRun && !isMobile && (
           <Badge
             status="success"
@@ -101,7 +82,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({ onToggleMenu }) => {
           />
         )}
 
-        <Tooltip title="快速扫描全市场（前200只股票）">
+        <Tooltip title="全市场扫描">
           <Button
             type="primary"
             size={isMobile ? "small" : "small"}
@@ -109,9 +90,24 @@ const HeaderBar: React.FC<HeaderBarProps> = ({ onToggleMenu }) => {
             loading={isRunning}
             onClick={handleQuickScan}
           >
-            {isMobile ? '扫描' : '快速扫描'}
+            {isMobile ? '' : '快速扫描'}
           </Button>
         </Tooltip>
+
+        {isMobile && (
+          <div
+            onClick={onMoreClick}
+            style={{
+              width: 36, height: 36,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 8,
+              cursor: 'pointer',
+              color: '#666',
+            }}
+          >
+            <MenuOutlined style={{ fontSize: 20 }} />
+          </div>
+        )}
 
         {!isMobile && (
           <Space>
