@@ -102,7 +102,7 @@ const SectorDetail: React.FC = () => {
 
       {/* K 线图 */}
       <div style={{ background: '#fff', borderRadius: 8, padding: 16, marginBottom: 16 }}>
-        <ReactECharts option={klineOption()} style={{ height: 400 }} />
+        <ReactECharts option={klineOption()} style={{ height: Math.max(250, Math.min(400, window.innerHeight * 0.4)) }} />
       </div>
 
       {/* 成分股 */}

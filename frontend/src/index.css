@@ -54,3 +54,54 @@ body {
   font-size: 12px;
   font-weight: 500;
 }
+
+/* ========== 移动端适配 ========== */
+
+/* iOS 安全区域 */
+body {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 触摸友好：可点击元素最小 44px */
+.clickable {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* 移动端表格容器自适应 */
+.mobile-table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 移动端卡片间距收紧 */
+@media (max-width: 767px) {
+  .ant-card-body {
+    padding: 12px !important;
+  }
+  .ant-statistic-content {
+    font-size: 20px !important;
+  }
+  .ant-table {
+    font-size: 12px !important;
+  }
+  .ant-table-cell {
+    padding: 6px 8px !important;
+  }
+}
+
+/* 避免 iOS 上输入缩放 */
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* 桌面端 hover 才有效 */
+@media (hover: hover) {
+  .hover-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+}

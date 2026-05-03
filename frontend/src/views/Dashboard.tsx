@@ -121,10 +121,10 @@ const Dashboard: React.FC = () => {
       </Row>
 
       {/* 大盘指数 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         {indices.length > 0 ? indices.map((idx: any) => (
-          <Col span={8} key={idx.name}>
-            <Card hoverable>
+          <Col xs={24} sm={12} lg={8} key={idx.name}>
+            <Card hoverable size={window.innerWidth < 576 ? "small" : "default"}>
               <Statistic
                 title={idx.name}
                 value={idx.close}
@@ -151,9 +151,9 @@ const Dashboard: React.FC = () => {
       </Row>
 
       {/* 概览卡片 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col span={8}>
-          <Card hoverable className="hover-card">
+      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+        <Col xs={24} sm={12} lg={8}>
+          <Card hoverable className="hover-card" size={window.innerWidth < 576 ? "small" : "default"}>
             <Statistic
               title="策略总数"
               value={strategies.length}
@@ -166,8 +166,8 @@ const Dashboard: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={8}>
-          <Card hoverable className="hover-card">
+        <Col xs={24} sm={12} lg={8}>
+          <Card hoverable className="hover-card" size={window.innerWidth < 576 ? "small" : "default"}>
             <Statistic
               title="今日匹配"
               value={todayResults.length}
@@ -176,8 +176,8 @@ const Dashboard: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col span={8}>
-          <Card hoverable className="hover-card" onClick={() => navigate('/strategies')}>
+        <Col xs={24} sm={12} lg={8}>
+          <Card hoverable className="hover-card" size={window.innerWidth < 576 ? "small" : "default"} onClick={() => navigate('/strategies')}>
             <Statistic
               title="最近运行策略"
               value={strategySummary.length}
@@ -193,11 +193,12 @@ const Dashboard: React.FC = () => {
       </Row>
 
       {/* 最近策略运行 */}
-      <Row gutter={[16, 16]}>
-        <Col span={12}>
+      <Row gutter={[12, 12]}>
+        <Col xs={24} lg={12}>
           <Card
             title={<Space><AuditOutlined />策略运行状态</Space>}
             extra={<a onClick={() => navigate('/strategies')}>全部策略 →</a>}
+            size={window.innerWidth < 576 ? "small" : "default"}
           >
             {strategySummary.length > 0 ? (
               <Table
@@ -221,10 +222,11 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
 
-        <Col span={12}>
+        <Col xs={24} lg={12}>
           <Card
             title={<Space><StockOutlined />最新信号</Space>}
             extra={<a onClick={() => navigate('/results')}>全部结果 →</a>}
+            size={window.innerWidth < 576 ? "small" : "default"}
           >
             {topResults.length > 0 ? (
               <Table

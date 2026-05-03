@@ -3,7 +3,8 @@ import { Layout, Badge, Space, Typography, Spin, Tooltip, Button } from 'antd'
 import {
   SyncOutlined,
   ClockCircleOutlined,
-  CheckCircleOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useAppStore } from '../stores/useAppStore'
@@ -12,11 +13,24 @@ import { runAllStrategies } from '../api'
 const { Header } = Layout
 const { Text } = Typography
 
-const HeaderBar: React.FC = () => {
+interface HeaderBarProps {
+  onToggleMenu: () => void
+}
+
+const HeaderBar: React.FC<HeaderBarProps> = ({ onToggleMenu }) => {
   const [currentTime, setCurrentTime] = useState(dayjs().format('HH:mm:ss'))
   const [isRunning, setIsRunning] = useState(false)
   const [lastRun, setLastRun] = useState<string | null>(null)
   const [runCount, setRunCount] = useState(0)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 992)
+  const collapsed = useAppStore((s) => s.collapsed)
+  const toggleCollapsed = useAppStore((s) => s.toggleCollapsed)
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 992)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -43,7 +57,7 @@ const HeaderBar: React.FC = () => {
     <Header
       style={{
         background: '#fff',
-        padding: '0 24px',
+        padding: isMobile ? '0 12px' : '0 24px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -54,27 +68,29 @@ const HeaderBar: React.FC = () => {
         zIndex: 99,
       }}
     >
-      {/* 左侧：标题 */}
+      {/* 左侧：菜单按钮 + 标题 */}
       <Space>
-        <Text strong style={{ fontSize: 16 }}>
-          📊 A股短线策略分析工具
-        </Text>
+        <Button
+          type="text"
+          icon={collapsed || isMobile ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          onClick={() => { if (isMobile) onToggleMenu(); else toggleCollapsed() }}
+          style={{ fontSize: 18, width: 40, height: 40 }}
+        />
+        {!isMobile && (
+          <Text strong style={{ fontSize: 16 }}>
+            📊 A股短线策略分析工具
+          </Text>
+        )}
+        {isMobile && (
+          <Text strong style={{ fontSize: 15 }}>
+            股票分析
+          </Text>
+        )}
       </Space>
 
       {/* 右侧：状态 */}
-      <Space size="large">
-        {/* 运行状态 */}
-        {isRunning ? (
-          <Badge
-            status="processing"
-            text={
-              <Text type="secondary">
-                <Spin size="small" style={{ marginRight: 4 }} />
-                正在扫描...
-              </Text>
-            }
-          />
-        ) : lastRun ? (
+      <Space size={isMobile ? "small" : "large"}>
+        {!isRunning && lastRun && !isMobile && (
           <Badge
             status="success"
             text={
@@ -83,28 +99,26 @@ const HeaderBar: React.FC = () => {
               </Text>
             }
           />
-        ) : (
-          <Badge status="default" text={<Text type="secondary">未扫描</Text>} />
         )}
 
-        {/* 快速扫描按钮 */}
         <Tooltip title="快速扫描全市场（前200只股票）">
           <Button
             type="primary"
-            size="small"
+            size={isMobile ? "small" : "small"}
             icon={<SyncOutlined />}
             loading={isRunning}
             onClick={handleQuickScan}
           >
-            快速扫描
+            {isMobile ? '扫描' : '快速扫描'}
           </Button>
         </Tooltip>
 
-        {/* 时钟 */}
-        <Space>
-          <ClockCircleOutlined style={{ color: '#999' }} />
-          <Text type="secondary">{currentTime}</Text>
-        </Space>
+        {!isMobile && (
+          <Space>
+            <ClockCircleOutlined style={{ color: '#999' }} />
+            <Text type="secondary">{currentTime}</Text>
+          </Space>
+        )}
       </Space>
     </Header>
   )

@@ -388,36 +388,36 @@ const StockDetail: React.FC = () => {
         <div style={{ color: '#999', fontSize: 13, marginBottom: 16 }} />
 
         {/* 2x4 数据网格 */}
-        <Row gutter={[16, 8]} style={{ marginBottom: 8 }}>
-          <Col span={6}>
+        <Row gutter={[8, 8]} style={{ marginBottom: 8 }}>
+          <Col xs={12} sm={6}>
             <div style={statLabel}>今开</div>
             <div style={statVal}>{today?.open?.toFixed(2) ?? '-'}</div>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={6}>
             <div style={statLabel}>最高</div>
             <div style={{ ...statVal, color: '#cf1322' }}>{today?.high?.toFixed(2) ?? '-'}</div>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={6}>
             <div style={statLabel}>成交量</div>
             <div style={statVal}>{formatVol(today?.volume)}</div>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={6}>
             <div style={statLabel}>换手率</div>
             <div style={statVal}>{latest.turnover_rate ?? '-'}</div>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={6}>
             <div style={statLabel}>昨收</div>
             <div style={statVal}>{prevClose?.toFixed(2) ?? '-'}</div>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={6}>
             <div style={statLabel}>最低</div>
             <div style={{ ...statVal, color: '#389e0d' }}>{today?.low?.toFixed(2) ?? '-'}</div>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={6}>
             <div style={statLabel}>成交额</div>
             <div style={statVal}>{formatMoney(today?.amount)}</div>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={6}>
             <div style={statLabel}>市盈(TTM)</div>
             <div style={statVal}>{latest.pe_ttm ?? '-'}</div>
           </Col>
@@ -451,7 +451,7 @@ const StockDetail: React.FC = () => {
         </div>
         <ReactECharts
           option={getKlineOption()}
-          style={{ height: 400 }}
+          style={{ height: Math.max(300, Math.min(400, window.innerHeight * 0.4)) }}
           onChartReady={onChartReady}
           onEvents={{
             click: onKlineClick,
@@ -467,14 +467,14 @@ const StockDetail: React.FC = () => {
       </div>
 
       {/* === MACD + RSI 并列 === */}
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={12}>
+      <Row gutter={12} style={{ marginBottom: 16 }}>
+        <Col xs={24} sm={12}>
           <div style={{ background: '#fff', borderRadius: 8, padding: '8px 0' }}>
             <div style={{ fontSize: 13, color: '#666', padding: '4px 16px' }}>MACD</div>
             <ReactECharts option={getMacdOption()} style={{ height: 200 }} notMerge />
           </div>
         </Col>
-        <Col span={12}>
+        <Col xs={24} sm={12}>
           <div style={{ background: '#fff', borderRadius: 8, padding: '8px 0' }}>
             <div style={{ fontSize: 13, color: '#666', padding: '4px 16px' }}>RSI</div>
             <ReactECharts option={getRsiOption()} style={{ height: 200 }} notMerge />

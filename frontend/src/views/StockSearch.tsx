@@ -338,14 +338,18 @@ const StockSearch: React.FC = () => {
       )}
 
       {/* 搜索结果显示区域 */}
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexDirection: window.innerWidth < 768 ? 'column' : 'row' }}>
         {/* 搜索结果列表（全屏时隐藏） */}
         {!fullScreen && (
-          <div style={{ flex: selectedCode ? '0 0 340px' : '1', maxWidth: selectedCode ? 340 : 'none' }}>
+          <div style={{
+            flex: selectedCode ? '0 0 340px' : '1',
+            maxWidth: selectedCode ? (window.innerWidth < 768 ? '100%' : 340) : 'none',
+            width: window.innerWidth < 768 ? '100%' : 'auto',
+          }}>
             {loading ? (
               <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
             ) : results.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {results.map((s: any) => (
                   <div
                     key={s.code}
@@ -353,7 +357,7 @@ const StockSearch: React.FC = () => {
                     style={{
                       background: selectedCode === s.code ? '#e6f4ff' : '#fff',
                       borderRadius: 8,
-                      padding: '12px 14px',
+                      padding: '10px 12px',
                       cursor: 'pointer',
                       border: selectedCode === s.code ? '1px solid #91caff' : '1px solid #f0f0f0',
                       transition: 'all 0.15s',
@@ -450,7 +454,7 @@ const StockSearch: React.FC = () => {
                 {/* K 线图 */}
                 <ReactECharts
                   option={klineOption()}
-                  style={{ height: fullScreen ? 360 : 200 }}
+                  style={{ height: fullScreen ? Math.min(360, window.innerHeight * 0.35) : Math.min(200, window.innerHeight * 0.25) }}
                   onEvents={{
                     dataZoom: (params: any) => {
                       if (params.batch?.[0]) {
@@ -465,12 +469,12 @@ const StockSearch: React.FC = () => {
                 {/* 全屏模式：MACD + RSI + 更多指标 */}
                 {fullScreen && (
                   <>
-                    <Row gutter={16} style={{ marginTop: 12 }}>
-                      <Col span={12}>
+                    <Row gutter={12} style={{ marginTop: 12 }}>
+                      <Col xs={24} sm={12}>
                         <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>MACD</div>
                         <ReactECharts option={macdOption()} style={{ height: 180 }} notMerge />
                       </Col>
-                      <Col span={12}>
+                      <Col xs={24} sm={12}>
                         <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>RSI</div>
                         <ReactECharts option={rsiOption()} style={{ height: 180 }} notMerge />
                       </Col>

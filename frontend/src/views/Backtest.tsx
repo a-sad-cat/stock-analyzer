@@ -351,13 +351,14 @@ const Backtest: React.FC = () => {
 
       {/* 回测配置 */}
       <Card size="small" style={{ marginBottom: 16 }}>
-        <Row gutter={[16, 12]} align="middle">
-          <Col span={4}>
+        <Row gutter={[12, 12]} align="middle">
+          <Col xs={24} sm={12} md={6} lg={4}>
             <Text strong style={{ fontSize: 13 }}>选择策略</Text>
             <Select
               value={selectedStrategy}
               onChange={setSelectedStrategy}
               style={{ width: '100%', marginTop: 4 }}
+              size="small"
               placeholder="选择策略"
               options={strategies.map((s: any) => ({
                 value: s.id,
@@ -365,10 +366,11 @@ const Backtest: React.FC = () => {
               }))}
             />
           </Col>
-          <Col span={5}>
+          <Col xs={24} sm={12} md={8} lg={5}>
             <Text strong style={{ fontSize: 13 }}>回测区间</Text>
             <RangePicker
               value={dateRange}
+              size="small"
               onChange={(dates) => {
                 if (dates && dates[0] && dates[1]) {
                   setDateRange([dates[0], dates[1]])
@@ -377,7 +379,7 @@ const Backtest: React.FC = () => {
               style={{ width: '100%', marginTop: 4 }}
             />
           </Col>
-          <Col span={2}>
+          <Col xs={12} sm={6} md={4} lg={2}>
             <Text strong style={{ fontSize: 13 }}>扫描股票</Text>
             <InputNumber
               value={stockLimit}
@@ -385,27 +387,29 @@ const Backtest: React.FC = () => {
               min={50}
               max={5000}
               step={50}
+              size="small"
               style={{ width: '100%', marginTop: 4 }}
             />
           </Col>
-          <Col span={2}>
+          <Col xs={12} sm={6} md={4} lg={2}>
             <Text strong style={{ fontSize: 13 }}>最低评分</Text>
             <InputNumber
               value={minScore}
               onChange={(v) => setMinScore(v || 80)}
               min={0}
               max={100}
+              size="small"
               style={{ width: '100%', marginTop: 4 }}
             />
           </Col>
-          <Col span={8}>
+          <Col xs={24} md={12} lg={8}>
             <Text strong style={{ fontSize: 13 }}>退出规则</Text>
-            <Space style={{ marginTop: 4, flexWrap: 'wrap' }}>
+            <Space style={{ marginTop: 4, flexWrap: 'wrap' }} size={4}>
               {exitRules.map((rule, idx) => (
                 <Tag
                   key={rule.type}
                   color={rule.enabled ? 'blue' : 'default'}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: 'pointer', fontSize: 11 }}
                   onClick={() => {
                     const copy = [...exitRules]
                     copy[idx] = { ...copy[idx], enabled: !copy[idx].enabled }
@@ -421,16 +425,14 @@ const Backtest: React.FC = () => {
               ))}
             </Space>
           </Col>
-          <Col span={3}>
+          <Col xs={24} md={6} lg={3}>
             <Button
               type="primary"
               icon={<PlayCircleOutlined />}
               onClick={handleRun}
               loading={running}
-              size="large"
               block
               disabled={!selectedStrategy}
-              style={{ marginTop: 20 }}
             >
               运行回测
             </Button>
@@ -441,11 +443,11 @@ const Backtest: React.FC = () => {
       {/* 回测结果 */}
       {currentRun && (
         <>
-          <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-            <Col span={4}>
+          <Row gutter={[8, 8]} style={{ marginBottom: 12 }}>
+            <Col xs={12} sm={8} md={4}>
               <Card size="small"><Statistic title="信号次数" value={currentRun.total_signals} suffix="次" /></Card>
             </Col>
-            <Col span={4}>
+            <Col xs={12} sm={8} md={4}>
               <Card size="small">
                 <Statistic
                   title="胜率"
@@ -456,7 +458,7 @@ const Backtest: React.FC = () => {
                 />
               </Card>
             </Col>
-            <Col span={4}>
+            <Col xs={12} sm={8} md={4}>
               <Card size="small">
                 <Statistic
                   title="平均收益"
@@ -468,30 +470,30 @@ const Backtest: React.FC = () => {
                 />
               </Card>
             </Col>
-            <Col span={4}>
+            <Col xs={12} sm={8} md={4}>
               <Card size="small">
                 <Statistic title="最大回撤" value={currentRun.max_drawdown} precision={1} suffix="%" valueStyle={{ color: '#fa8c16' }} />
               </Card>
             </Col>
-            <Col span={4}>
+            <Col xs={12} sm={8} md={4}>
               <Card size="small">
                 <Statistic title="盈亏比" value={currentRun.profit_loss_ratio} precision={2} valueStyle={{ color: currentRun.profit_loss_ratio >= 1.5 ? '#cf1322' : '#999' }} />
               </Card>
             </Col>
-            <Col span={4}>
+            <Col xs={12} sm={8} md={4}>
               <Card size="small">
                 <Statistic title="平均持有" value={currentRun.avg_hold_days} precision={1} suffix="天" />
               </Card>
             </Col>
           </Row>
 
-          <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-            <Col span={14}>
+          <Row gutter={[8, 8]} style={{ marginBottom: 12 }}>
+            <Col xs={24} lg={14}>
               <Card size="small" title="累计收益曲线">
                 <ReactECharts option={equityOption()} style={{ height: 260 }} />
               </Card>
             </Col>
-            <Col span={10}>
+            <Col xs={24} lg={10}>
               <Card size="small" title="按市场环境对比">
                 <ReactECharts option={regimeOption()} style={{ height: 260 }} />
               </Card>

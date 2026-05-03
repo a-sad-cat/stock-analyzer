@@ -398,17 +398,19 @@ const Results: React.FC = () => {
       </div>
 
       {/* 工具栏 */}
-      <Card style={{ marginBottom: 16 }}>
-        <Space wrap>
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Space wrap size={[8, 8]}>
           <DatePicker
+            size="small"
             value={dayjs(selectedDate)}
             onChange={(d) => d && setSelectedDate(d.format('YYYY-MM-DD'))}
             allowClear={false}
           />
           <Select
+            size="small"
             placeholder="筛选策略"
             allowClear
-            style={{ width: 160 }}
+            style={{ minWidth: 120 }}
             value={selectedStrategy}
             onChange={(v) => setSelectedStrategy(v)}
             options={strategies.map((s: any) => ({
@@ -417,9 +419,10 @@ const Results: React.FC = () => {
             }))}
           />
           <Select
+            size="small"
             value={minScore}
             onChange={(v) => setMinScore(v)}
-            style={{ width: 120 }}
+            style={{ width: 100 }}
             options={[
               { value: 0, label: '全部评分' },
               { value: 80, label: '高分(≥80)' },
@@ -427,28 +430,30 @@ const Results: React.FC = () => {
             ]}
           />
           <Select
+            size="small"
             value={sectorFilter}
             onChange={(v) => setSectorFilter(v)}
-            style={{ width: 140 }}
+            style={{ minWidth: 110 }}
             allowClear
             placeholder="筛选行业"
             options={allSectors.map((s) => ({ value: s, label: s }))}
           />
           <Input
+            size="small"
             placeholder="搜索代码/名称/策略"
             prefix={<SearchOutlined />}
-            style={{ width: 200 }}
+            style={{ width: 160 }}
             value={searchKeyword}
             onChange={(e) => setSearchKeyword(e.target.value)}
             allowClear
           />
-          <Button icon={<ReloadOutlined />} onClick={() => loadData(true)}>
+          <Button size="small" icon={<ReloadOutlined />} onClick={() => loadData(true)}>
             刷新
           </Button>
-          <Button type="primary" onClick={handleRefresh}>
+          <Button size="small" type="primary" onClick={handleRefresh}>
             重新扫描
           </Button>
-          <Button icon={<DownloadOutlined />} onClick={exportCsv} disabled={results.length === 0}>
+          <Button size="small" icon={<DownloadOutlined />} onClick={exportCsv} disabled={results.length === 0}>
             导出CSV
           </Button>
         </Space>
@@ -486,7 +491,7 @@ const Results: React.FC = () => {
           </Space>
         }
         placement="right"
-        width={1040}
+        width={Math.min(1040, window.innerWidth - 48)}
         open={!!drawerCode}
         onClose={() => { setDrawerCode(null); setStockDetail(null); setSelectedIdx(-1) }}
         extra={

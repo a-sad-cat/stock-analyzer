@@ -1,12 +1,14 @@
 import React from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu } from 'antd'
+import { Menu } from 'antd'
 import {
   DashboardOutlined, FundOutlined, AuditOutlined, StockOutlined,
   SearchOutlined, FireOutlined, BarChartOutlined,
 } from '@ant-design/icons'
 
-const { Sider } = Layout
+interface SidebarProps {
+  onNavigate?: () => void
+}
 
 const menuItems = [
   {
@@ -41,18 +43,21 @@ const menuItems = [
   },
 ]
 
-const Sidebar: React.FC = () => {
+const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // 如果当前路径是 /stock/xxx，选中最接近的父菜单
   const selectedKey = location.pathname.startsWith('/stock/')
     ? '/results'
     : location.pathname
 
+  const handleClick = ({ key }: { key: string }) => {
+    navigate(key)
+    onNavigate?.()
+  }
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Logo */}
       <div
         style={{
           height: 64,
@@ -62,7 +67,7 @@ const Sidebar: React.FC = () => {
           borderBottom: '1px solid #f0f0f0',
           cursor: 'pointer',
         }}
-        onClick={() => navigate('/')}
+        onClick={() => { navigate('/'); onNavigate?.() }}
       >
         <StockOutlined style={{ fontSize: 24, color: '#1677ff', marginRight: 8 }} />
         <span style={{ fontSize: 18, fontWeight: 600, color: '#1677ff' }}>
@@ -70,16 +75,14 @@ const Sidebar: React.FC = () => {
         </span>
       </div>
 
-      {/* 导航菜单 */}
       <Menu
         mode="inline"
         selectedKeys={[selectedKey]}
         items={menuItems}
-        onClick={({ key }) => navigate(key)}
+        onClick={handleClick}
         style={{ borderRight: 'none', flex: 1 }}
       />
 
-      {/* 底部版本信息 */}
       <div
         style={{
           padding: '12px 16px',

@@ -244,12 +244,12 @@ const Strategies: React.FC = () => {
     <div>
       {/* 标题栏 */}
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Col>
+        <Col xs={24} sm={12}>
           <Title level={4} style={{ margin: 0 }}>
             <AuditOutlined style={{ marginRight: 8 }} />
             策略管理
           </Title>
-          <Space split={<Text type="secondary">|</Text>}>
+          <Space split={<Text type="secondary">|</Text>} wrap>
             <Text type="secondary">共 {strategies.length} 个策略</Text>
             <Text type="success">
               <CheckCircleOutlined /> {enabledCount} 个已启用
@@ -261,37 +261,38 @@ const Strategies: React.FC = () => {
             )}
           </Space>
         </Col>
-        <Col>
-          <Space>
-            <Button icon={<SettingOutlined />} onClick={() => {
+        <Col xs={24} sm={12} style={{ marginTop: window.innerWidth < 576 ? 8 : 0 }}>
+          <Space wrap style={{ float: window.innerWidth < 576 ? 'none' : 'right' }}>
+            <Button size="small" icon={<SettingOutlined />} onClick={() => {
               setBatchModalOpen(true)
               loadAllBuiltinStrategies()
             }}>
               批量管理
             </Button>
-            <Button icon={<AppstoreAddOutlined />} onClick={openAddBuiltin}>
-              添加内置策略
+            <Button size="small" icon={<AppstoreAddOutlined />} onClick={openAddBuiltin}>
+              添加内置
             </Button>
             <Button
               type="primary"
+              size="small"
               icon={<PlusOutlined />}
               onClick={() => setCreateModalOpen(true)}
             >
-              新建自定义策略
+              新建
             </Button>
-            <Button onClick={loadStrategies} icon={<SyncOutlined />}>
+            <Button size="small" onClick={loadStrategies} icon={<SyncOutlined />}>
               刷新
             </Button>
           </Space>
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]}>
+      <Row gutter={[12, 12]}>
         {/* 策略列表 */}
-        <Col span={6}>
+        <Col xs={24} lg={6}>
           <Card
-            style={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}
-            bodyStyle={{ padding: 0 }}
+            style={{ height: window.innerWidth < 992 ? 'auto' : 'calc(100vh - 200px)', overflow: 'auto' }}
+            styles={{ body: { padding: 0 } }}
           >
             <List
               dataSource={strategies}
@@ -340,11 +341,11 @@ const Strategies: React.FC = () => {
         </Col>
 
         {/* 策略详情 */}
-        <Col span={18}>
+        <Col xs={24} lg={18}>
           {selectedStrategy ? (
             <Card
               title={
-                <Space>
+                <Space wrap>
                   <AuditOutlined style={{ color: '#1677ff' }} />
                   <Text strong style={{ fontSize: 16 }}>{selectedStrategy.name}</Text>
                   <Tag color={typeColors[selectedStrategy.type]} style={{ fontSize: 11 }}>
@@ -356,20 +357,21 @@ const Strategies: React.FC = () => {
                 </Space>
               }
               extra={
-                <Space>
+                <Space wrap size="small">
                   {selectedStrategy.enabled ? (
                     <Button
                       type="primary"
+                      size="small"
                       icon={<PlayCircleOutlined />}
                       loading={running === selectedStrategy.id}
                       onClick={() => handleRun(selectedStrategy.id)}
                     >
-                      {running === selectedStrategy.id ? '扫描中...' : '运行策略'}
+                      {running === selectedStrategy.id ? '扫描中...' : '运行'}
                     </Button>
                   ) : (
                     <Tooltip title="策略禁用时无法运行，请先启用">
-                      <Button type="primary" icon={<PlayCircleOutlined />} disabled>
-                        运行策略
+                      <Button type="primary" size="small" icon={<PlayCircleOutlined />} disabled>
+                        运行
                       </Button>
                     </Tooltip>
                   )}
@@ -382,9 +384,7 @@ const Strategies: React.FC = () => {
                     }
                     onConfirm={() => handleToggle(selectedStrategy.id)}
                   >
-                    <Button
-                      icon={selectedStrategy.enabled ? <StopOutlined /> : <CheckCircleOutlined />}
-                    >
+                    <Button size="small" icon={selectedStrategy.enabled ? <StopOutlined /> : <CheckCircleOutlined />}>
                       {selectedStrategy.enabled ? '禁用' : '启用'}
                     </Button>
                   </Popconfirm>
@@ -397,22 +397,21 @@ const Strategies: React.FC = () => {
                     }
                     onConfirm={() => handleDelete(selectedStrategy.id)}
                   >
-                    <Button danger icon={<MinusCircleOutlined />}>
+                    <Button size="small" danger icon={<MinusCircleOutlined />}>
                       移除
                     </Button>
                   </Popconfirm>
                 </Space>
               }
             >
-              <Row gutter={[16, 16]}>
-                <Col span={16}>
+              <Row gutter={[12, 12]}>
+                <Col xs={24} lg={16}>
                   <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
                     <Descriptions.Item label="描述">
                       {selectedStrategy.description || '暂无描述'}
                     </Descriptions.Item>
                   </Descriptions>
 
-                  {/* 标签 */}
                   {selectedStrategy.tags && selectedStrategy.tags.length > 0 && (
                     <div style={{ marginBottom: 16 }}>
                       <Text type="secondary" style={{ fontSize: 12 }}>标签</Text>
@@ -426,7 +425,7 @@ const Strategies: React.FC = () => {
                     </div>
                   )}
                 </Col>
-                <Col span={8}>
+                <Col xs={24} lg={8}>
                   <Descriptions column={1} size="small">
                     <Descriptions.Item label="类型">
                       <Tag color={typeColors[selectedStrategy.type]}>
