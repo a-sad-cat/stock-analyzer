@@ -43,9 +43,38 @@ See `PROJECT.md` for full API reference, strategy list, and data flow.
 - No lint, formatter, or typecheck config for backend. Frontend typecheck is part of `npm run build`.
 - No tests anywhere in the repo.
 
+## Deployment (mobile/cloud)
+
+Two free services required: **Render** (backend) + **Vercel** (frontend).
+
+### Step 1: Render - deploy backend
+
+1. Go to https://dashboard.render.com → **New +** → **Blueprint**
+2. Connect `a-sad-cat/stock-analyzer` repo
+3. Render auto-reads `render.yaml`, creates Web Service + PostgreSQL
+4. Get backend URL: `https://stock-analyzer.onrender.com`
+5. Update `frontend/vercel.json` rewrite destination with this URL
+
+### Step 2: Vercel - deploy frontend
+
+1. Go to https://vercel.com → **Add New Project** → Import `a-sad-cat/stock-analyzer`
+2. Configure:
+   - **Root Directory**: `frontend`
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+3. Add env var `VITE_API_BASE_URL` = Render backend URL (optional, uses vercel.json rewrites otherwise)
+4. Deploy → get URL like `stock-analyzer.vercel.app`
+
+### Step 3: update CORS
+
+In Render dashboard → Environment → add `CORS_ORIGINS`:
+```
+https://stock-analyzer.vercel.app,http://localhost:5173,http://localhost:3000
+```
+
 ## Notable quirks
 
 - ASGI server is **uvicorn** (not hypercorn/gunicorn). Use `python -m uvicorn main:app`, not `uvicorn main:app`.
-- `config.py` sets `DATABASE_URL = f"sqlite:///{DATABASE_PATH}"` — synchronous SQLAlchemy with `check_same_thread=False`.
+- `config.py` uses `DATABASE_URL` env var for PostgreSQL (production) or SQLite (local dev).
 - `docker` dependencies: `httpx` is listed in requirements.txt but not used in current code.
 - AKShare may fail silently (network issues, API changes). All endpoints handle exceptions gracefully.
