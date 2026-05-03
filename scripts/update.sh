@@ -12,10 +12,13 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo ">>> 拉取最新代码..."
 cd "$PROJECT_DIR"
+# 丢弃服务器自动生成的缓存文件（否则 pull 会冲突）
+git stash push -m "update-backup" -- backend/data/ frontend/package-lock.json frontend/dist/ 2>/dev/null || true
 # 国内用 ghfast.top 代理加速 GitHub
 git remote set-url origin https://ghfast.top/https://github.com/a-sad-cat/stock-analyzer.git
 git pull origin deploy/aliyun
 git remote set-url origin https://github.com/a-sad-cat/stock-analyzer.git
+git stash drop 2>/dev/null || true
 
 echo ">>> 安装/更新后端依赖..."
 if [ -d "venv" ]; then
