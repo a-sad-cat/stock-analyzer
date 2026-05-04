@@ -15,6 +15,9 @@ Type=simple
 User=root
 WorkingDirectory=/root/stock-analyzer/backend
 Environment="PYTHONPATH=/root/stock-analyzer/backend"
+Environment="LLM_API_KEY=sk-82a9eafeccd2482bacdc5b1747f63d7a"
+Environment="LLM_BASE_URL=https://api.deepseek.com/v1"
+Environment="LLM_MODEL=deepseek-chat"
 ExecStart=/root/stock-analyzer/backend/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
 Restart=always
 RestartSec=5
