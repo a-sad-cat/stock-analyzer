@@ -2,13 +2,15 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
 *.egg
 
 # Virtual environment
 venv/
 .venv/
 env/
+
+# Python build output (if any)
+/dist/
 
 # Database
 *.db
@@ -18,6 +20,7 @@ env/
 
 # Node
 node_modules/
+frontend/dist/
 
 # IDE
 .idea/
@@ -36,3 +39,6 @@ Thumbs.db
 # Build artifacts
 *.log
 *.tsbuildinfo
+
+# Render (阿里云分支不需要)
+render.yaml

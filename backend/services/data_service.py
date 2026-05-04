@@ -19,6 +19,9 @@ from database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
+# 进程生命周期内仅执行一次的市场修复标志
+_repair_done = False
+
 
 # ---------- 缓存检查 ----------
 def _need_refresh(db: Session, code: str, days: int = 60) -> bool:
@@ -90,6 +93,60 @@ def _save_daily_data(db: Session, code: str, df: pd.DataFrame):
 
 
 # ---------- 公开接口 ----------
+def _strip_code_prefix(raw_code: str) -> str:
+    """去掉代码中的 sh/sz/bj 前缀，返回纯数字代码"""
+    raw = str(raw_code).lower()
+    for prefix in ('sh', 'sz', 'bj'):
+        if raw.startswith(prefix):
+            return raw[len(prefix):]
+    return raw_code
+
+
+def _fix_market_from_code(raw_code: str) -> str:
+    """从股票代码判断正确市场"""
+    raw = _strip_code_prefix(raw_code)
+    if raw.startswith('92'):
+        return 'BJ'
+    first = raw[0] if raw else ''
+    if first in ('6', '9'):
+        return 'SH'
+    if first in ('0', '3', '2'):
+        return 'SZ'
+    return 'BJ'
+
+
+def repair_stock_market(db: Session):
+    """修复数据库中代码前缀错误 + 市场分类错误（仅首次调用执行）"""
+    global _repair_done
+    if _repair_done:
+        return
+    from models.stock import StockDaily
+    stocks = db.query(Stock).all()
+    code_fixed = 0
+    market_fixed = 0
+    for s in stocks:
+        old_code = s.code
+        new_code = _strip_code_prefix(old_code)
+        if old_code != new_code:
+            # 修复 StockDaily.code
+            db.query(StockDaily).filter(StockDaily.code == old_code).update(
+                {StockDaily.code: new_code}, synchronize_session=False
+            )
+            s.code = new_code
+            code_fixed += 1
+        correct = _fix_market_from_code(new_code)
+        if s.market != correct:
+            s.market = correct
+            market_fixed += 1
+    if code_fixed or market_fixed:
+        db.commit()
+        if code_fixed:
+            logger.info(f"修复 {code_fixed} 只股票的代码前缀")
+        if market_fixed:
+            logger.info(f"修复 {market_fixed} 只股票的市场分类")
+    _repair_done = True
+
+
 def get_all_stocks(db: Session = None) -> list[dict]:
     """
     获取所有A股列表
@@ -104,18 +161,16 @@ def get_all_stocks(db: Session = None) -> list[dict]:
         # 先从本地数据库获取
         stocks = db.query(Stock).all()
         if stocks and len(stocks) > 1000:
+            if not _repair_done:
+                repair_stock_market(db)
             return [{"code": s.code, "name": s.name, "market": s.market, "industry": s.industry} for s in stocks]
 
         # 本地没有，从 AKShare（新浪数据源）获取
         import akshare as ak
         logger.info("从 AKShare（新浪源）获取A股列表...")
-        try:
-            df = ak.stock_zh_a_spot()
-            df = df[['代码', '名称']].rename(columns={'代码': 'code', '名称': 'name'})
-            df['industry'] = ''
-        except Exception as e:
-            logger.error(f"获取股票列表失败: {e}")
-            return []
+        df = ak.stock_zh_a_spot_em()
+        df = df[['代码', '名称']].rename(columns={'代码': 'code', '名称': 'name'})
+        df['industry'] = ''
 
         # 清理代码前缀 + 判断市场
         def _clean_code_and_market(raw):
@@ -123,8 +178,9 @@ def get_all_stocks(db: Session = None) -> list[dict]:
             for prefix, market in [('sh', 'SH'), ('sz', 'SZ'), ('bj', 'BJ')]:
                 if raw.startswith(prefix):
                     return raw[len(prefix):].zfill(6), market
-            # 无前缀时按首位数字判断
             first = raw[0]
+            if raw.startswith('92'):
+                return raw.zfill(6), 'BJ'
             if first in ('6', '9'):
                 return raw.zfill(6), 'SH'
             if first in ('0', '3', '2'):
@@ -199,25 +255,57 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
                 # 如果 DB 里有缓存指标，跳过重新计算
                 if 'MA5' in data:
                     return df_result
-                return _add_technical_indicators(df_result)
+                df_result = _add_technical_indicators(df_result)
+                _save_daily_data(db, code, df_result.reset_index())
+                return df_result
 
         import akshare as ak
+
+        # 清除代码中已有的 sh/sz/bj 前缀（AKShare 某些版本会带前缀）
+        bare_code = code.lower()
+        for prefix in ('sh', 'sz', 'bj'):
+            if bare_code.startswith(prefix):
+                bare_code = bare_code[len(prefix):]
+                break
+
         logger.info(f"从 AKShare 获取 {code} 的日K数据...")
         time.sleep(0.3)
 
-        if code.startswith(('6', '9')):
+        # 检查数据库中存储的市场信息
+        try:
+            stock = db.query(Stock).filter(Stock.code == code).first()
+            db_market = stock.market.lower() if stock and stock.market else ''
+        except Exception:
+            db_market = ''
+
+        if db_market == 'sh':
             market_prefix = 'sh'
-        elif code.startswith(('0', '3', '2')):
+        elif db_market == 'sz':
+            market_prefix = 'sz'
+        elif db_market == 'bj':
+            market_prefix = 'bj'
+        elif bare_code.startswith(('6', '9')):
+            market_prefix = 'sh'
+        elif bare_code.startswith(('0', '3', '2')):
             market_prefix = 'sz'
         else:
             market_prefix = 'bj'
 
         try:
-            df = ak.stock_zh_a_daily(symbol=f"{market_prefix}{code}",
+            df = ak.stock_zh_a_daily(symbol=f"{market_prefix}{bare_code}",
                                      start_date=start_date, end_date=end_date)
         except Exception as e:
             logger.warning(f"获取 {code} 数据失败: {e}")
-            return pd.DataFrame()
+
+            if market_prefix != 'sz':
+                try:
+                    df = ak.stock_zh_a_daily(symbol=f"sz{bare_code}",
+                                             start_date=start_date, end_date=end_date)
+                    logger.info(f"  → 降级到 sz 前缀成功")
+                except Exception:
+                    return pd.DataFrame()
+            else:
+                return pd.DataFrame()
 
         if df is None or df.empty:
             return pd.DataFrame()
@@ -226,6 +314,9 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
             'Date': 'date', 'Open': 'open', 'Close': 'close',
             'High': 'high', 'Low': 'low', 'Volume': 'volume', 'Amount': 'amount',
         })
+        if 'date' not in df.columns:
+            logger.warning(f"{code} 返回数据缺少 date 列")
+            return pd.DataFrame()
         df['date'] = pd.to_datetime(df['date']).dt.date
         if 'pct_chg' not in df.columns:
             df['pct_chg'] = df['close'].pct_change() * 100
@@ -266,46 +357,53 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
 
 
 def _add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """添加技术指标到 DataFrame"""
+    """手动计算技术指标（无需 pandas-ta，纯 numpy/pandas 实现）"""
     try:
-        import pandas_ta as ta
+        close = df['close']
+        high = df['high']
+        low = df['low']
+        volume = df['volume']
 
         # 均线
-        df['MA5'] = ta.sma(df['close'], length=5)
-        df['MA10'] = ta.sma(df['close'], length=10)
-        df['MA20'] = ta.sma(df['close'], length=20)
-        df['MA60'] = ta.sma(df['close'], length=60)
-        df['MA120'] = ta.sma(df['close'], length=120)
+        df['MA5'] = close.rolling(window=5).mean()
+        df['MA10'] = close.rolling(window=10).mean()
+        df['MA20'] = close.rolling(window=20).mean()
+        df['MA60'] = close.rolling(window=60).mean()
+        df['MA120'] = close.rolling(window=120).mean()
 
-        # MACD
-        macd = ta.macd(df['close'], fast=12, slow=26, signal=9)
-        if macd is not None:
-            df['DIF'] = macd['MACD_12_26_9'] if 'MACD_12_26_9' in macd.columns else macd.iloc[:, 0]
-            df['DEA'] = macd['MACDs_12_26_9'] if 'MACDs_12_26_9' in macd.columns else macd.iloc[:, 1]
-            df['MACD'] = macd['MACDh_12_26_9'] if 'MACDh_12_26_9' in macd.columns else macd.iloc[:, 2]
+        # MACD（EMA 算法）
+        ema12 = close.ewm(span=12, adjust=False).mean()
+        ema26 = close.ewm(span=26, adjust=False).mean()
+        df['DIF'] = ema12 - ema26
+        df['DEA'] = df['DIF'].ewm(span=9, adjust=False).mean()
+        df['MACD'] = 2 * (df['DIF'] - df['DEA'])
 
         # RSI
-        df['RSI'] = ta.rsi(df['close'], length=14)
+        delta = close.diff()
+        gain = delta.where(delta > 0, 0)
+        loss = (-delta).where(delta < 0, 0)
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+        rs = avg_gain / avg_loss.replace(0, float('nan'))
+        df['RSI'] = 100 - (100 / (1 + rs))
 
         # KDJ
-        kdj = ta.stoch(df['high'], df['low'], df['close'], k=9, d=3, smooth_k=3)
-        if kdj is not None:
-            cols = kdj.columns
-            df['K'] = kdj[cols[0]]
-            df['D'] = kdj[cols[1]]
-            df['J'] = kdj[cols[2]] if len(cols) > 2 else 3 * kdj[cols[0]] - 2 * kdj[cols[1]]
+        low_9 = low.rolling(window=9).min()
+        high_9 = high.rolling(window=9).max()
+        rsv = 100 * ((close - low_9) / (high_9 - low_9).replace(0, float('nan')))
+        df['K'] = rsv.ewm(com=2, adjust=False).mean()
+        df['D'] = df['K'].ewm(com=2, adjust=False).mean()
+        df['J'] = 3 * df['K'] - 2 * df['D']
 
         # 成交量均线
-        df['VOL_MA5'] = ta.sma(df['volume'], length=5)
-        df['VOL_MA10'] = ta.sma(df['volume'], length=10)
+        df['VOL_MA5'] = volume.rolling(window=5).mean()
+        df['VOL_MA10'] = volume.rolling(window=10).mean()
 
         # 布林带
-        bbands = ta.bbands(df['close'], length=20, std=2)
-        if bbands is not None:
-            cols = bbands.columns
-            df['BB_UPPER'] = bbands[cols[0]]
-            df['BB_MID'] = bbands[cols[1]]
-            df['BB_LOWER'] = bbands[cols[2]]
+        df['BB_MID'] = close.rolling(window=20).mean()
+        bb_std = close.rolling(window=20).std()
+        df['BB_UPPER'] = df['BB_MID'] + 2 * bb_std
+        df['BB_LOWER'] = df['BB_MID'] - 2 * bb_std
 
     except Exception as e:
         logger.warning(f"计算技术指标失败: {e}")
@@ -360,6 +458,9 @@ def _get_spot_map(allow_fetch=True) -> dict:
             _spot_cache[bare_code] = {
                 'close': round(float(row.get('最新价', 0)), 2),
                 'pct_chg': round(float(row.get('涨跌幅', 0)), 2),
+                'turnover_rate': round(float(row.get('换手率', 0) or 0), 2),
+                'pe_ttm': round(float(row.get('市盈率-动态', 0) or 0), 2),
+                'market_cap': float(row.get('总市值', 0) or 0),
             }
         _spot_cache_time = now
     except Exception:
@@ -403,6 +504,10 @@ def get_stock_detail(code: str) -> dict:
     finally:
         db.close()
 
+    # 实时行情（换手率、市盈率、总市值）
+    spot_map = _get_spot_map(allow_fetch=False)
+    spot = spot_map.get(code, {})
+
     # K线数据
     df = get_daily_data(code)
     if df.empty:
@@ -430,6 +535,7 @@ def get_stock_detail(code: str) -> dict:
             'low': round(float(row['low']), 2),
             'close': round(float(row['close']), 2),
             'volume': float(row['volume']),
+            'amount': float(row['amount']) if pd.notna(row.get('amount')) else 0,
             'pct_chg': round(float(row['pct_chg']), 2) if pd.notna(row.get('pct_chg')) else 0,
         }
         for col in ['MA5', 'MA10', 'MA20', 'MA60', 'DIF', 'DEA', 'MACD', 'RSI', 'K', 'D', 'J',
@@ -448,6 +554,9 @@ def get_stock_detail(code: str) -> dict:
             "pct_chg": round(float(latest['pct_chg']), 2) if pd.notna(latest.get('pct_chg')) else 0,
             "volume": float(latest['volume']),
             "amount": float(latest['amount']),
+            "turnover_rate": spot.get('turnover_rate'),
+            "pe_ttm": spot.get('pe_ttm'),
+            "market_cap": spot.get('market_cap'),
             **signals,
         },
         "kline": kline_data,

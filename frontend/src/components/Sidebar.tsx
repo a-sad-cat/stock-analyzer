@@ -1,51 +1,25 @@
 import React from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Menu } from 'antd'
+import { Typography } from 'antd'
 import {
   DashboardOutlined, FundOutlined, AuditOutlined, StockOutlined,
   SearchOutlined, FireOutlined, BarChartOutlined, RobotOutlined,
 } from '@ant-design/icons'
+
+const { Text } = Typography
 
 interface SidebarProps {
   onNavigate?: () => void
 }
 
 const menuItems = [
-  {
-    key: '/',
-    icon: <DashboardOutlined />,
-    label: '仪表盘',
-  },
-  {
-    key: '/search',
-    icon: <SearchOutlined />,
-    label: '股票搜索',
-  },
-  {
-    key: '/sectors',
-    icon: <FireOutlined />,
-    label: '板块热度',
-  },
-  {
-    key: '/strategies',
-    icon: <AuditOutlined />,
-    label: '策略管理',
-  },
-  {
-    key: '/results',
-    icon: <FundOutlined />,
-    label: '扫描结果',
-  },
-  {
-    key: '/backtest',
-    icon: <BarChartOutlined />,
-    label: '策略回测',
-  },
-  {
-    key: '/llm',
-    icon: <RobotOutlined />,
-    label: 'AI 分析',
-  },
+  { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
+  { key: '/search', icon: <SearchOutlined />, label: '股票搜索' },
+  { key: '/sectors', icon: <FireOutlined />, label: '板块热度' },
+  { key: '/strategies', icon: <AuditOutlined />, label: '策略管理' },
+  { key: '/results', icon: <FundOutlined />, label: '扫描结果' },
+  { key: '/backtest', icon: <BarChartOutlined />, label: '策略回测' },
+  { key: '/llm', icon: <RobotOutlined />, label: 'AI 分析' },
 ]
 
 const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {
@@ -56,7 +30,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {
     ? '/results'
     : location.pathname
 
-  const handleClick = ({ key }: { key: string }) => {
+  const handleClick = (key: string) => {
     navigate(key)
     onNavigate?.()
   }
@@ -64,40 +38,61 @@ const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div
+        onClick={() => { navigate('/'); onNavigate?.() }}
         style={{
-          height: 64,
+          height: 56,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          borderBottom: '1px solid #f0f0f0',
-          cursor: 'pointer',
+          borderBottom: '1px solid var(--color-border)',
+          gap: 8,
         }}
-        onClick={() => { navigate('/'); onNavigate?.() }}
       >
-        <StockOutlined style={{ fontSize: 24, color: '#1677ff', marginRight: 8 }} />
-        <span style={{ fontSize: 18, fontWeight: 600, color: '#1677ff' }}>
+        <StockOutlined style={{ fontSize: 24, color: '#1677ff' }} />
+        <span style={{ fontSize: 18, fontWeight: 700, color: '#1677ff' }}>
           股票分析
         </span>
       </div>
 
-      <Menu
-        mode="inline"
-        selectedKeys={[selectedKey]}
-        items={menuItems}
-        onClick={handleClick}
-        style={{ borderRight: 'none', flex: 1 }}
-      />
+      <div style={{ padding: '8px', flex: 1 }}>
+        {menuItems.map((item) => {
+          const active = item.key === selectedKey
+          return (
+            <div
+              key={item.key}
+              onClick={() => handleClick(item.key)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '12px 16px',
+                borderRadius: 10,
+                marginBottom: 4,
+                cursor: 'pointer',
+                background: active ? '#e6f4ff' : 'transparent',
+                color: active ? '#1677ff' : '#666',
+                fontWeight: active ? 600 : 400,
+                fontSize: 15,
+                transition: 'all 0.15s',
+              }}
+            >
+              <span style={{ fontSize: 18, width: 24, textAlign: 'center' }}>
+                {item.icon}
+              </span>
+              {item.label}
+            </div>
+          )
+        })}
+      </div>
 
       <div
         style={{
-          padding: '12px 16px',
-          borderTop: '1px solid #f0f0f0',
-          fontSize: 12,
-          color: '#999',
+          padding: '16px',
+          borderTop: '1px solid var(--color-border)',
           textAlign: 'center',
         }}
       >
-        v1.0.0 短线策略版
+        <Text style={{ fontSize: 12, color: '#999' }}>v1.0.0 移动版</Text>
       </div>
     </div>
   )

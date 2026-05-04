@@ -32,9 +32,9 @@ AKSHARE_TIMEOUT = 30
 # 周末和节假日休市时，数据几天不变，设长避免反复拉取
 CACHE_EXPIRE_HOURS = 48
 
-# 默认要扫描的股票数量限制（防止全市场扫描太慢）
-# 0 表示扫描全部股票
-MAX_SCAN_STOCKS = 200
+# 默认扫描全部（0=全部），由定时任务在后台逐步缓存
+# 首次全量扫描较慢，后续增量更新
+MAX_SCAN_STOCKS = 0
 SCAN_WORKERS = 8
 
 # ========================================
@@ -59,3 +59,10 @@ LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.7"))
 LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "2048"))
 # 最大重试次数
 LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "2"))
+
+# 定时任务配置（每天自动刷新数据的时间）
+# 开盘前、盘中休息、收盘后各刷新一次
+SCHEDULE_TIMES = ["10:00", "11:40", "15:10"]
+
+# 每个策略返回最符合的前 K 条结果
+TOP_K_RESULTS = 50

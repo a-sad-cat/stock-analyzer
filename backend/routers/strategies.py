@@ -183,12 +183,13 @@ def api_reorder_strategies(req: ReorderRequest, db: Session = Depends(get_db)):
 @router.post("/{strategy_id}/run")
 def api_run_strategy(
     strategy_id: int,
-    limit: int = Query(MAX_SCAN_STOCKS, ge=0, le=99999, description="扫描股票数量限制（0=全部）"),
+    limit: int = Query(0, ge=0, le=99999, description="扫描股票数量限制（0=全部）"),
+    top_k: int = Query(50, ge=1, le=200, description="返回评分最高的前N条"),
     db: Session = Depends(get_db)
 ):
-    """运行单个策略扫描全市场"""
+    """运行单个策略，全市场扫描后返回评分最高的 top_k 条"""
     try:
-        results = run_strategy(db, strategy_id, stock_limit=limit)
+        results = run_strategy(db, strategy_id, stock_limit=limit, top_k=top_k)
         return {
             "strategy_id": strategy_id,
             "count": len(results),
@@ -201,12 +202,13 @@ def api_run_strategy(
 
 @router.post("/run-all")
 def api_run_all_strategies(
-    limit: int = Query(MAX_SCAN_STOCKS, ge=0, le=99999, description="扫描股票数量限制（0=全部）"),
+    limit: int = Query(0, ge=0, le=99999, description="扫描股票数量限制（0=全部）"),
+    top_k: int = Query(50, ge=1, le=200, description="每个策略返回评分最高的前N条"),
     db: Session = Depends(get_db)
 ):
-    """运行所有启用的策略"""
+    """运行所有启用的策略，每个策略返回评分最高的 top_k 条"""
     try:
-        all_results = run_all_strategies(db, stock_limit=limit)
+        all_results = run_all_strategies(db, stock_limit=limit, top_k=top_k)
         total = sum(v.get("count", 0) for v in all_results.values())
         return {
             "total_matched": total,

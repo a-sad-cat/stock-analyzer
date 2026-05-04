@@ -11,6 +11,7 @@ from services.sector_service import (
     calc_heat_score,
     sustained_sectors,
     rebuild_sector_map,
+    enrich_stocks_info,
 )
 from strategies.engine import run_strategy_for_hot_sectors
 from database import SessionLocal
@@ -52,7 +53,7 @@ def api_sector_heatmap(sector_type: str = Query("", description="过滤: concept
             "stock_count": s.get("stock_count", 0),
         })
 
-    result.sort(key=lambda x: x["heat_score"], reverse=True)
+    result.sort(key=lambda x: x["pct_chg"], reverse=True)
     return {"sectors": result, "total": len(result)}
 
 
@@ -97,6 +98,7 @@ def api_rebuild_sector_map():
 
 @router.get("/{sector_name}/stocks")
 def api_sector_stocks(sector_name: str, sector_type: str = Query("concept")):
-    """获取板块成分股列表"""
+    """获取板块成分股列表（含名称和涨跌幅，按涨幅降序）"""
     codes = get_sector_stocks(sector_name, sector_type)
-    return {"sector_name": sector_name, "stocks": codes, "total": len(codes)}
+    enriched = enrich_stocks_info(codes)
+    return {"sector_name": sector_name, "stocks": enriched, "total": len(enriched)}

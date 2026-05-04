@@ -2,106 +2,150 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 全局样式 */
+:root {
+  --color-primary: #12B7F5;
+  --color-primary-light: #e0f7ff;
+  --color-primary-dark: #0ea5e9;
+  --color-danger: #f5222d;
+  --color-danger-light: #fff1f0;
+  --color-success: #52c41a;
+  --color-success-light: #f6ffed;
+  --color-warning: #fa8c16;
+  --color-warning-light: #fff7e6;
+  --color-bg-page: #f5f6fa;
+  --color-bg-card: #ffffff;
+  --color-bg-input: #f5f7fa;
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #6b7280;
+  --color-text-hint: #9ca3af;
+  --color-border: #f0f0f0;
+  --header-height: 48px;
+  --tab-height: 64px;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, 'Noto Sans', sans-serif;
-  background-color: #f5f5f5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--color-bg-page);
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
 }
 
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
-/* 自定义滚动条 */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+input, select, textarea {
+  font-size: 16px !important;
+  user-select: auto;
+  -webkit-user-select: auto;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+/* Price colors */
+.price-up { color: var(--color-danger); }
+.price-down { color: var(--color-success); }
+.bg-up { background: var(--color-danger); }
+.bg-down { background: var(--color-success); }
+
+/* Cards */
+.card-mobile {
+  background: var(--color-bg-card);
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
 }
 
-::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.15);
-  border-radius: 3px;
+/* Glass effect header */
+.glass {
+  background: rgba(245, 246, 250, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
-/* 卡片悬停效果 */
-.hover-card {
-  transition: all 0.3s ease;
+/* Tap feedback */
+.tap-active:active {
+  opacity: 0.7;
+  transform: scale(0.98);
 }
 
-.hover-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+/* Shimmer skeleton */
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
 }
 
-/* 涨红跌绿 */
-.up-color { color: #cf1322; }
-.down-color { color: #389e0d; }
-
-/* 标签样式 */
-.strategy-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
-/* ========== 移动端适配 ========== */
-
-/* iOS 安全区域 */
-body {
-  -webkit-text-size-adjust: 100%;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* 触摸友好：可点击元素最小 44px */
-.clickable {
-  min-height: 44px;
-  min-width: 44px;
-}
-
-/* 移动端表格容器自适应 */
-.mobile-table {
+/* Horizontal scroll container */
+.scroll-x {
   overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar { display: none; }
+
+/* Ant Design overrides */
+.ant-modal-content {
+  border-radius: 20px !important;
+  margin: 0 8px;
+}
+.ant-drawer-content-wrapper {
+  max-width: 100vw !important;
+}
+.ant-drawer-body {
+  padding: 12px !important;
+}
+.ant-tag {
+  border-radius: 6px;
+  border: none;
+}
+.ant-card {
+  border-radius: 16px;
+  border: 1px solid var(--color-border);
+}
+.ant-card-body {
+  padding: 14px !important;
+}
+.ant-btn {
+  border-radius: 12px;
+}
+.ant-input, .ant-select-selector, .ant-picker {
+  border-radius: 12px !important;
+}
+.ant-pagination .ant-pagination-item-active {
+  background: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+}
+.ant-pagination .ant-pagination-item-active a {
+  color: #fff !important;
+}
+.ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background: var(--color-primary-light) !important;
 }
 
-/* 移动端卡片间距收紧 */
-@media (max-width: 767px) {
-  .ant-card-body {
-    padding: 12px !important;
-  }
-  .ant-statistic-content {
-    font-size: 20px !important;
-  }
-  .ant-table {
-    font-size: 12px !important;
-  }
-  .ant-table-cell {
-    padding: 6px 8px !important;
-  }
+/* Safe area bottom inset */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
-/* 避免 iOS 上输入缩放 */
-@media (max-width: 767px) {
-  input, select, textarea {
-    font-size: 16px !important;
-  }
-}
-
-/* 桌面端 hover 才有效 */
-@media (hover: hover) {
-  .hover-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  }
+/* Chart wrapper */
+.chart-box {
+  background: var(--color-bg-card);
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
 }

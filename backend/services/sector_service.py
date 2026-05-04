@@ -522,6 +522,86 @@ def calc_heat_score(sector: dict, market_pct: float = 0) -> dict:
     return {"score": round(score, 1), "breakdown": details, "base_score": round(score, 1)}
 
 
+def enrich_stocks_info(codes: list[str]) -> list[dict]:
+    """为成分股代码列表补充名称和涨跌幅，按涨幅降序排列"""
+    if not codes:
+        return []
+
+    spot_map = _get_spot_map()
+    from models.stock import Stock
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        db_stocks = {s.code: s.name for s in db.query(Stock).filter(Stock.code.in_(codes)).all()}
+    finally:
+        db.close()
+
+    enriched = []
+    for code in codes:
+        name = db_stocks.get(code, code)
+        pct = spot_map.get(code, {}).get('pct_chg')
+        enriched.append({
+            "code": code,
+            "name": name,
+            "pct_chg": round(pct, 2) if pct is not None else None,
+        })
+
+    enriched.sort(key=lambda x: (x["pct_chg"] is not None, x["pct_chg"] or 0), reverse=True)
+    return enriched
+
+
+def _build_fallback_kline(codes: list[str]) -> list[dict]:
+    """用成分股日K线数据聚合出板块平均OHLCV走势"""
+    if not codes:
+        return []
+
+    try:
+        from services.data_service import get_daily_data
+        import pandas as pd
+
+        ohlc_maps = {field: [] for field in ['open', 'close', 'high', 'low', 'volume']}
+        for c in codes[:10]:
+            df = get_daily_data(c)
+            if df is None or df.empty:
+                continue
+            df_indexed = df.set_index('date')
+            for field in ohlc_maps:
+                if field in df_indexed.columns:
+                    ohlc_maps[field].append(df_indexed[field].rename(c))
+
+        if not ohlc_maps['close']:
+            return []
+
+        close_df = pd.concat(ohlc_maps['close'], axis=1).dropna(how='all')
+        if close_df.empty:
+            return []
+        avg_close = close_df.mean(axis=1).iloc[-120:]
+        kline = []
+        for d in avg_close.index:
+            entry = {"date": str(d), "close": round(float(avg_close.loc[d]), 2)}
+            for field in ['open', 'high', 'low', 'volume']:
+                series_list = ohlc_maps[field]
+                if series_list:
+                    field_df = pd.concat(series_list, axis=1).dropna(how='all')
+                    if d in field_df.index:
+                        entry[field] = round(float(field_df.loc[d].mean()), 2) if field != 'volume' else float(field_df.loc[d].mean())
+                    else:
+                        entry[field] = entry.get('close') if field in ('open', 'high', 'low') else 0
+                else:
+                    entry[field] = entry.get('close') if field in ('open', 'high', 'low') else 0
+            entry["pct_chg"] = 0
+            kline.append(entry)
+        if kline and len(kline) >= 2:
+            for i in range(1, len(kline)):
+                prev = kline[i - 1]["close"]
+                curr = kline[i]["close"]
+                if prev and prev != 0:
+                    kline[i]["pct_chg"] = round((curr - prev) / prev * 100, 2)
+        return kline
+    except Exception:
+        return []
+
+
 def get_sector_detail(sector_name: str, sector_type: str) -> dict | None:
     sectors = refresh_sectors()
     sector = next((s for s in sectors if s["name"] == sector_name and s["sector_type"] == sector_type), None)
@@ -529,7 +609,15 @@ def get_sector_detail(sector_name: str, sector_type: str) -> dict | None:
         return None
 
     codes = get_sector_stocks(sector_name, sector_type)
-    sector["stocks"] = codes
+    sector["stocks"] = enrich_stocks_info(codes)
+
+    # 检查 K 线缓存
+    kline_key = f"kline:{sector_name}:{sector_type}"
+    now = time.time()
+    cached = _cache_detail.get(kline_key)
+    if cached and now - cached.get("time", 0) < DETAIL_TTL:
+        sector["kline"] = cached.get("data", [])
+        return sector
 
     try:
         import akshare as ak
@@ -549,27 +637,14 @@ def get_sector_detail(sector_name: str, sector_type: str) -> dict | None:
                 "pct_chg": round(float(row.get("涨跌幅", 0)), 2),
             })
         sector["kline"] = kline
+        _cache_detail[kline_key] = {"data": kline, "time": now}
     except Exception:
-        # EM K线不可用，尝试用成分股平均K线替代（仅行业板块）
-        if sector_type == "industry" and codes:
-            try:
-                from services.data_service import get_daily_data
-                import pandas as pd
-                all_closes = []
-                for c in codes[:10]:
-                    df = get_daily_data(c)
-                    if not df.empty:
-                        all_closes.append(df['close'].rename(c))
-                if all_closes:
-                    merged = pd.concat(all_closes, axis=1)
-                    avg = merged.mean(axis=1)
-                    sector["kline"] = [
-                        {"date": str(idx), "close": round(float(v), 2), "pct_chg": 0}
-                        for idx, v in avg.tail(120).items()
-                    ]
-            except Exception:
-                pass
-        if not sector.get("kline"):
+        # EM K线不可用，用成分股平均K线替代（行业+概念均生效）
+        fallback = _build_fallback_kline(codes)
+        if fallback:
+            sector["kline"] = fallback
+            _cache_detail[kline_key] = {"data": fallback, "time": now}
+        else:
             sector["kline"] = []
 
     return sector

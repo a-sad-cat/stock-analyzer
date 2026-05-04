@@ -41,6 +41,8 @@ logger = logging.getLogger(__name__)
 logger.info("=" * 50)
 logger.info("stock-analyzer 后端启动中...")
 logger.info("AKShare 后台预热可能需要 30-60 秒")
+logger.info("定时任务: 每天 10:00 / 11:40 / 15:10 自动刷新全市场数据")
+logger.info("数据策略: 用户 API 优先读 DB 缓存，无缓存时按需拉取单只股票")
 logger.info("=" * 50)
 
 # --- 创建数据库表 ---
@@ -116,6 +118,16 @@ threading.Thread(target=_warm_cache, daemon=True).start()
 threading.Thread(target=_warm_sectors, daemon=True).start()
 threading.Thread(target=_warm_sector_map, daemon=True).start()
 threading.Thread(target=build_stock_sectors_map, daemon=True).start()
+
+# 注：启动时不再自动预取全市场股票数据，改为由定时任务（10:00/11:40/15:10）统一刷新。
+# 用户 API 访问时若 DB 无缓存，会按需拉取单只股票并缓存到 SQLite。
+
+# --- 初始化定时任务 ---
+try:
+    from scheduler import init_scheduler
+    init_scheduler()
+except Exception as e:
+    logger.warning(f"定时任务初始化失败（不影响正常运行）: {e}")
 
 
 @app.get("/api/health")
