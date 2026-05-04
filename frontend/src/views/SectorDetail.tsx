@@ -38,38 +38,70 @@ const SectorDetail: React.FC = () => {
   const klineData = detail.kline?.slice(-120) || []
   const last = klineData[klineData.length - 1]
   const isUp = detail.pct_chg >= 0
+  const hasOHLC = klineData.length > 0 && klineData[0].open != null && klineData[0].high != null
 
   const klineOption = () => {
     if (!klineData.length) return {}
     const dates = klineData.map((d: any) => d.date)
-    const ohlc = klineData.map((d: any) => [d.open, d.close, d.low, d.high])
-    const volumes = klineData.map((d: any) => d.volume)
-    const volColors = klineData.map((d: any) => d.close >= d.open ? '#f5222d' : '#52c41a')
+
+    if (hasOHLC) {
+      const ohlc = klineData.map((d: any) => [d.open, d.close, d.low, d.high])
+      const volumes = klineData.map((d: any) => d.volume)
+      const volColors = klineData.map((d: any) => d.close >= d.open ? '#f5222d' : '#52c41a')
+      return {
+        animation: true,
+        animationDuration: 300,
+        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+        grid: [{ left: '3%', right: '3%', top: '5%', height: '56%' }, { left: '3%', right: '3%', top: '70%', height: '20%' }],
+        xAxis: [
+          { type: 'category', data: dates, axisTick: { show: false }, axisLabel: { fontSize: 10 }, gridIndex: 0 },
+          { type: 'category', data: dates, axisTick: { show: false }, axisLabel: { show: false }, gridIndex: 1 },
+        ],
+        yAxis: [
+          { type: 'value', scale: true, axisLabel: { fontSize: 10 }, gridIndex: 0 },
+          { type: 'value', scale: true, axisLabel: { fontSize: 10, formatter: (v: number) => formatVol(v) }, gridIndex: 1 },
+        ],
+        series: [
+          {
+            name: 'K线', type: 'candlestick', data: ohlc,
+            itemStyle: { color: '#f5222d', color0: '#52c41a', borderColor: '#f5222d', borderColor0: '#52c41a' },
+            xAxisIndex: 0, yAxisIndex: 0,
+          },
+          {
+            name: '成交量', type: 'bar', data: volumes,
+            xAxisIndex: 1, yAxisIndex: 1,
+            itemStyle: { color: (p: any) => volColors[p.dataIndex] },
+          },
+        ],
+      }
+    }
+
+    // 降级折线图：只有收盘价数据
+    const closes = klineData.map((d: any) => d.close)
+    const chgColors = klineData.map((d: any) => (d.pct_chg ?? 0) >= 0 ? '#f5222d' : '#52c41a')
     return {
       animation: true,
       animationDuration: 300,
-      tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-      grid: [{ left: '3%', right: '3%', top: '5%', height: '56%' }, { left: '3%', right: '3%', top: '70%', height: '20%' }],
-      xAxis: [
-        { type: 'category', data: dates, axisTick: { show: false }, axisLabel: { fontSize: 10 }, gridIndex: 0 },
-        { type: 'category', data: dates, axisTick: { show: false }, axisLabel: { show: false }, gridIndex: 1 },
-      ],
-      yAxis: [
-        { type: 'value', scale: true, axisLabel: { fontSize: 10 }, gridIndex: 0 },
-        { type: 'value', scale: true, axisLabel: { fontSize: 10, formatter: (v: number) => formatVol(v) }, gridIndex: 1 },
-      ],
-      series: [
-        {
-          name: 'K线', type: 'candlestick', data: ohlc,
-          itemStyle: { color: '#f5222d', color0: '#52c41a', borderColor: '#f5222d', borderColor0: '#52c41a' },
-          xAxisIndex: 0, yAxisIndex: 0,
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          const p = Array.isArray(params) ? params[0] : params
+          if (!p) return ''
+          const d = klineData[p.dataIndex]
+          const chg = d?.pct_chg ?? 0
+          const color = chg >= 0 ? '#f5222d' : '#52c41a'
+          return `<div style="font-size:12px">${p.axisValue}<br/>收盘: <b style="color:${color}">${p.value?.toFixed(2)}</b></div>`
         },
-        {
-          name: '成交量', type: 'bar', data: volumes,
-          xAxisIndex: 1, yAxisIndex: 1,
-          itemStyle: { color: (p: any) => volColors[p.dataIndex] },
-        },
-      ],
+      },
+      xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },
+      yAxis: { type: 'value', scale: true, axisLabel: { fontSize: 10 } },
+      series: [{
+        type: 'line', data: closes,
+        lineStyle: { color: '#1677ff', width: 1.5 },
+        itemStyle: { color: (p: any) => chgColors[p.dataIndex] },
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [{ offset: 0, color: 'rgba(22,119,255,0.12)' }, { offset: 1, color: 'rgba(22,119,255,0.02)' }] } },
+      }],
     }
   }
 
@@ -115,26 +147,49 @@ const SectorDetail: React.FC = () => {
       </div>
 
       {/* K-line chart */}
-      <div className="chart-box" style={{ padding: '12px 8px', marginBottom: 12 }}>
-        <ReactECharts option={klineOption()} style={{ height: 280 }} />
+      <div className="card-mobile" style={{ padding: '12px 8px', marginBottom: 12 }}>
+        <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 4, paddingLeft: 4 }}>
+          近期走势{hasOHLC ? '（K线）' : '（收盘价）'}
+        </Text>
+        {klineData.length > 0 ? (
+          <ReactECharts option={klineOption()} style={{ height: 280 }} />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 48, color: '#bbb', fontSize: 14 }}>
+            暂无走势数据
+          </div>
+        )}
       </div>
 
       {/* Stocks list */}
       {detail.stocks && detail.stocks.length > 0 && (
         <div className="card-mobile" style={{ padding: 16 }}>
           <Text strong style={{ fontSize: 15, display: 'block', marginBottom: 10 }}>
-            成分股（{detail.stocks.length} 只）
+            成分股（{detail.stocks.length} 只） · 按涨幅降序
           </Text>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {detail.stocks.slice(0, 50).map((code: string) => (
-              <Tag
-                key={code}
-                style={{ cursor: 'pointer', fontSize: 12, fontFamily: 'monospace', padding: '2px 8px' }}
-                onClick={() => navigate(`/stock/${code}`)}
-              >
-                {code}
-              </Tag>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {detail.stocks.slice(0, 50).map((s: any, i: number) => {
+              const up = (s.pct_chg ?? 0) >= 0
+              return (
+                <div
+                  key={s.code}
+                  onClick={() => navigate(`/stock/${s.code}`)}
+                  style={{
+                    display: 'flex', alignItems: 'center', padding: '7px 8px',
+                    borderRadius: 6, cursor: 'pointer',
+                    background: i % 2 === 0 ? 'rgba(0,0,0,0.018)' : 'transparent',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(22,119,255,0.06)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = i % 2 === 0 ? 'rgba(0,0,0,0.018)' : 'transparent')}
+                >
+                  <Text style={{ fontFamily: 'monospace', fontSize: 12, color: '#999', width: 68, flexShrink: 0 }}>{s.code}</Text>
+                  <Text style={{ fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</Text>
+                  <Text style={{ fontSize: 13, fontWeight: 600, color: up ? '#f5222d' : '#52c41a', width: 70, textAlign: 'right', flexShrink: 0 }}>
+                    {s.pct_chg != null ? `${up ? '+' : ''}${s.pct_chg.toFixed(2)}%` : '-'}
+                  </Text>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
