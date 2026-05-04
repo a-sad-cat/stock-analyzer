@@ -134,7 +134,7 @@ const AIAnalysis: React.FC = () => {
     setSearchLoading(true)
     try {
       const res = await searchStocks(keyword)
-      setSearchResults(res?.items?.slice(0, 10) || [])
+      setSearchResults(res?.stocks?.slice(0, 10) || [])
     } catch {
       message.error('搜索失败，请检查网络')
     } finally {
@@ -175,7 +175,7 @@ const AIAnalysis: React.FC = () => {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 16, minHeight: 'calc(100vh - 88px)' }}>
+    <div style={{ display: 'flex', gap: 16, height: 'calc(100vh - 190px)' }}>
       {/* ======== 左侧面板 ======== */}
       <div style={{ width: 340, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* 股票搜索卡片 */}
