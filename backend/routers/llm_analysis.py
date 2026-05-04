@@ -335,7 +335,13 @@ def _run_scan_for_stock(
 ) -> list[dict]:
     """对单只股票运行策略扫描"""
     from models.strategy import Strategy, StrategyResult
+    from strategies.engine import _init_builtin_strategies, _builtin_strategies
+    from strategies.engine import CustomStrategyExecutor
     from datetime import datetime
+
+    # 确保内置策略已初始化
+    if not _builtin_strategies:
+        _init_builtin_strategies(db)
 
     # 获取要使用的策略列表
     if strategy_id:
@@ -354,31 +360,28 @@ def _run_scan_for_stock(
     if df is None or (hasattr(df, 'empty') and df.empty):
         return []
 
-    # 运行策略
-    from strategies.builtin import strategy_map
-
     results = []
     now = datetime.now()
-    today = date.today()
-    name = df.get("name", code) if hasattr(df, "get") else code
 
     for strategy in strategies:
         try:
-            fn = strategy_map.get(strategy.name) if strategy.type == "builtin" else None
-            if fn is None and strategy.config:
-                # 自定义策略走引擎
-                from strategies.engine import _evaluate_custom_strategy
-                fn = lambda c, n, d: _evaluate_custom_strategy(strategy.config, d)
-            if fn is None:
+            # 获取策略执行器
+            if strategy.type == "builtin" and strategy.id in _builtin_strategies:
+                executor = _builtin_strategies[strategy.id]
+            elif strategy.config:
+                executor = CustomStrategyExecutor(
+                    strategy.name, strategy.description, strategy.config or {}
+                )
+            else:
                 continue
 
-            eval_result = fn(code, name, df)
+            eval_result = executor.evaluate(code, strategy.name, df)
             if eval_result:
                 db_result = StrategyResult(
                     strategy_id=strategy.id,
                     strategy_name=strategy.name,
                     stock_code=code,
-                    stock_name=name,
+                    stock_name=eval_result.get("name", strategy.name),
                     score=eval_result.get("score", 0),
                     signals=eval_result.get("signals", {}),
                     reason=eval_result.get("reason", ""),
@@ -395,6 +398,9 @@ def _run_scan_for_stock(
             logger.debug(f"{code} 策略 {strategy.name} 评估失败: {e}")
 
     if results:
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
 
     return results
