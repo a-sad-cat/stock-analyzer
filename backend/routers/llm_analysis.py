@@ -82,6 +82,7 @@ def _result_to_response(r: AnalysisResult) -> dict:
         "model_used": r.model_used,
         "tokens_used": r.tokens_used,
         "elapsed_seconds": r.elapsed_seconds,
+        "data_sources": r.data_sources,
     }
 
 

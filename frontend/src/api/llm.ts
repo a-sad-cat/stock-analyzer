@@ -23,6 +23,7 @@ export interface AnalysisResult {
   model_used: string
   tokens_used: number
   elapsed_seconds: number
+  data_sources: string[]
 }
 
 export interface ScanResult {

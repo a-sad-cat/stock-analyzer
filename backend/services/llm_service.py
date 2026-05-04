@@ -69,6 +69,9 @@ class AnalysisResult:
     tokens_used: int = 0
     elapsed_seconds: float = 0.0
 
+    # 数据来源说明（哪些维度的数据被使用）
+    data_sources: list[str] = field(default_factory=list)
+
     def to_dict(self) -> dict:
         return asdict(self)
 
@@ -415,6 +418,27 @@ class StockAnalysisEngine:
             # 填充结果
             result.success = True
             result.model_used = self.client._model
+
+            # 记录数据来源
+            sources = ["技术面数据（K线/MACD/RSI/KDJ/均线/布林带）"]
+            if strategy_hits:
+                sources.append("策略信号（已触发策略匹配结果）")
+            if extra_context:
+                if extra_context.get("sectors"):
+                    sources.append("板块归属信息")
+                if extra_context.get("news"):
+                    sources.append("市场新闻")
+                if extra_context.get("announcements"):
+                    sources.append("公司公告")
+            missing = []
+            if not extra_context or not extra_context.get("news"):
+                missing.append("市场新闻（超时或不可用）")
+            if not extra_context or not extra_context.get("announcements"):
+                missing.append("公司公告（超时或不可用）")
+            if not extra_context or not extra_context.get("sectors"):
+                missing.append("板块归属（未查到或数据库为空）")
+            sources.extend(missing)
+            result.data_sources = sources
             result.sentiment_score = _clamp(parsed.get("sentiment_score", 50), 0, 100)
             result.trend_prediction = str(parsed.get("trend_prediction", "震荡"))
             result.operation_advice = str(parsed.get("operation_advice", "观望"))

@@ -472,6 +472,39 @@ const AnalysisResultView: React.FC<{
         </Card>
       )}
 
+      {/* 数据来源说明 */}
+      {result.data_sources?.length > 0 && (
+        <div style={{
+          marginTop: 8,
+          padding: '8px 12px',
+          borderRadius: 8,
+          background: '#fafafa',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 6,
+        }}>
+          <Text type="secondary" style={{ fontSize: 11 }}>数据来源：</Text>
+          {result.data_sources.map((src, i) => {
+            const isMissing = src.includes('超时') || src.includes('不可用') || src.includes('未查到')
+            return (
+              <Tag
+                key={i}
+                style={{
+                  fontSize: 10,
+                  lineHeight: '16px',
+                  margin: 0,
+                  opacity: isMissing ? 0.6 : 1,
+                }}
+                color={isMissing ? 'default' : undefined}
+              >
+                {isMissing ? '✗ ' : '✓ '}{src}
+              </Tag>
+            )
+          })}
+        </div>
+      )}
+
       {/* 元信息 */}
       <div style={{ textAlign: 'right', paddingBottom: 12 }}>
         {result.model_used && <Text type="secondary" style={{ fontSize: 11, marginRight: 12 }}>模型：{result.model_used}</Text>}
