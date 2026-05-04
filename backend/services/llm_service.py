@@ -157,6 +157,7 @@ def _build_analysis_prompt(
     name: str,
     kline_df: pd.DataFrame,
     strategy_hits: list[dict],
+    extra_context: dict = None,
 ) -> str:
     """
     构建 LLM 分析 prompt
@@ -203,8 +204,35 @@ def _build_analysis_prompt(
     else:
         parts.append("## 策略信号\n- 当前无策略触发信号\n")
 
+    # 4.5 额外上下文（板块 + 新闻 + 公告）
+    if extra_context:
+        # 板块信息
+        if extra_context.get("sectors"):
+            parts.append(f"\n## 所属板块\n- {', '.join(extra_context['sectors'][:8])}\n")
+
+        # 公司公告
+        if extra_context.get("announcements"):
+            parts.append(f"\n## 公司近期公告\n")
+            for a in extra_context["announcements"][:5]:
+                parts.append(f"- [{a.get('date', '')}] {a.get('title', '')}\n")
+
+        # 市场新闻
+        if extra_context.get("news"):
+            parts.append(f"\n## 相关市场新闻\n")
+            for n in extra_context["news"][:5]:
+                parts.append(f"- {n.get('title', '')}\n")
+
+        # 板块热度
+        if extra_context.get("sector_heat"):
+            heat = extra_context["sector_heat"]
+            if isinstance(heat, dict) and heat.get("score"):
+                parts.append(f"\n## 所属板块热度评分: {heat.get('score', 0):.0f}/100\n")
+
     # 5. 分析要求
-    parts.append(f"\n请基于以上数据，以 JSON 格式返回分析结果（只返回 JSON，不要任何其他文字）：\n\n")
+    parts.append(f"\n请综合技术面数据" +
+        ("、策略信号" if strategy_hits else "") +
+        ("、板块归属/新闻/公告" if extra_context and (extra_context.get("sectors") or extra_context.get("news") or extra_context.get("announcements")) else "") +
+        "，以 JSON 格式返回分析结果（只返回 JSON，不要任何其他文字）：\n\n")
     parts.append("""```json
 {
   "sentiment_score": <0-100 整数，综合评分，60以上偏多，40以下偏空>,
@@ -343,6 +371,7 @@ class StockAnalysisEngine:
         name: str,
         kline_df: pd.DataFrame,
         strategy_hits: list[dict],
+        extra_context: dict = None,
     ) -> AnalysisResult:
         """
         对单只股票进行 AI 分析
@@ -366,7 +395,7 @@ class StockAnalysisEngine:
             return result
 
         # 构建分析 prompt
-        user_prompt = _build_analysis_prompt(code, name, kline_df, strategy_hits)
+        user_prompt = _build_analysis_prompt(code, name, kline_df, strategy_hits, extra_context)
         system_prompt = _build_system_prompt()
 
         start_time = time.time()
@@ -535,3 +564,104 @@ def get_analysis_engine() -> StockAnalysisEngine:
     if _engine_instance is None:
         _engine_instance = StockAnalysisEngine()
     return _engine_instance
+
+
+# ========================================
+# 多维度上下文采集（公告 + 新闻 + 板块）
+# ========================================
+
+
+def collect_extra_context(
+    code: str, db_session=None, timeout: float = 5.0
+) -> dict:
+    """
+    采集股票的多维度分析上下文
+
+    Returns:
+        {
+            "sectors": ["板块名1", ...],
+            "sector_heat": {"score": 85, ...} or None,
+            "announcements": [{"date": "2026-05-01", "title": "..."}, ...],
+            "news": [{"title": "...", "source": "东方财富", ...}, ...],
+        }
+    """
+    context = {}
+
+    # 1. 板块归属（从本地数据库查询，最快）
+    try:
+        if db_session:
+            from models.sector import StockSector, Sector
+            rows = (
+                db_session.query(Sector.name)
+                .join(StockSector, Sector.id == StockSector.sector_id)
+                .filter(StockSector.stock_code == code)
+                .limit(10)
+                .all()
+            )
+            context["sectors"] = [r[0] for r in rows] if rows else []
+    except Exception:
+        pass
+
+    # 2. 板块热度（简化：仅取板块列表）
+
+    # 3. 公司公告（从东方财富获取，带超时控制）
+    try:
+        import threading
+
+        announcements = []
+
+        def _fetch_notices():
+            try:
+                import akshare as ak
+                # 东方财富个股公告
+                df = ak.stock_notice_report(symbol="ALL")
+                if df is not None and not df.empty:
+                    # 过滤该股票代码相关的公告
+                    name_col = "stock_name" if "stock_name" in df.columns else df.columns[0]
+                    matched = df[df[name_col].astype(str).str.contains(code[:6], na=False)]
+                    if not matched.empty:
+                        matched = matched.head(5)
+                        for _, row in matched.iterrows():
+                            announcements.append({
+                                "date": str(row.get("notice_date", row.get("date", ""))),
+                                "title": str(row.get("notice_title", row.get("title", ""))),
+                            })
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_fetch_notices, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
+        if announcements:
+            context["announcements"] = announcements
+    except Exception:
+        pass
+
+    # 4. 市场新闻（从东方财富获取个股相关新闻）
+    try:
+        import threading
+
+        news = []
+
+        def _fetch_news():
+            try:
+                import akshare as ak
+                df = ak.stock_news_em(stock=code)
+                if df is not None and not df.empty:
+                    for _, row in df.head(5).iterrows():
+                        news.append({
+                            "title": str(row.get("title", row.get("content", ""))),
+                            "source": str(row.get("source", "")),
+                        })
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_fetch_news, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
+        if news:
+            context["news"] = news
+    except Exception:
+        pass
+
+    return context

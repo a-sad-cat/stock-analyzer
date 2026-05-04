@@ -46,18 +46,19 @@ const tabs = [
     ),
   },
   {
-    key: '/sectors',
-    label: '板块',
+    key: '/llm',
+    label: 'AI分析',
     icon: (active: boolean, color: string) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <rect x="3" y="3" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
+        {/* 芯片/AI 图标 */}
+        <rect x="4" y="4" width="16" height="16" rx="4" stroke={color} strokeWidth="1.6"
           fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
-        <rect x="14" y="3" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
+        <rect x="8" y="8" width="8" height="8" rx="2" stroke={color} strokeWidth="1.6"
           fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
-        <rect x="3" y="14" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
-          fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
-        <rect x="14" y="14" width="7" height="7" rx="2" stroke={color} strokeWidth="1.6"
-          fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
+        <circle cx="12" cy="12" r="2" stroke={color} strokeWidth="1.2"
+          fill={active ? '#fff' : 'none'} />
+        <path d="M12 2v2M12 20v2M2 12h2M20 12h2" stroke={color} strokeWidth="1.2"
+          strokeLinecap="round" opacity={0.5} />
       </svg>
     ),
   },

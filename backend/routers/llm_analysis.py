@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from services.llm_service import get_analysis_engine, AnalysisResult
+from services.llm_service import get_analysis_engine, AnalysisResult, collect_extra_context
 from services.data_service import get_daily_data
 from models.stock import Stock
 
@@ -126,12 +126,16 @@ def api_analyze_stock(req: AnalyzeRequest, db: Session = Depends(get_db)):
     # 获取今日策略命中结果
     strategy_hits = _get_today_strategy_hits(code, db)
 
+    # 采集多维度上下文（板块 + 新闻 + 公告）
+    extra_context = collect_extra_context(code, db_session=db)
+
     # 调用 LLM 分析
     result = engine.analyze(
         code=code,
         name=name,
         kline_df=kline_df,
         strategy_hits=strategy_hits,
+        extra_context=extra_context,
     )
 
     return _result_to_response(result)
@@ -271,12 +275,16 @@ def api_analyze_with_scan(
         for r in scan_results
     ]
 
+    # 采集多维度上下文
+    extra_context = collect_extra_context(code, db_session=db)
+
     # 调用 LLM 分析
     result = engine.analyze(
         code=code,
         name=name,
         kline_df=kline_df,
         strategy_hits=strategy_hits,
+        extra_context=extra_context,
     )
 
     response = _result_to_response(result)

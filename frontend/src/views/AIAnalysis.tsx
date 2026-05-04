@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Input, Button, Card, Tag, Progress, Spin, Empty, message, Typography,
   Space,
@@ -298,6 +299,7 @@ const AnalysisResultView: React.FC<{
   result: AnalysisResult
   scanResults: ScanResult[]
 }> = ({ result, scanResults }) => {
+  const navigate = useNavigate()
   const scoreColor = getScoreColor(result.sentiment_score)
   const trendInfo = getTrendInfo(result.trend_prediction)
 
@@ -340,8 +342,20 @@ const AnalysisResultView: React.FC<{
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ marginBottom: 8 }}>
-              <Text strong style={{ fontSize: 18 }}>{result.name}</Text>
-              <Text type="secondary" style={{ marginLeft: 6 }}>{result.code}</Text>
+              <Text
+                strong
+                style={{ fontSize: 18, color: '#1677ff', cursor: 'pointer' }}
+                onClick={() => navigate(`/stock/${result.code}`)}
+              >
+                {result.name}
+              </Text>
+              <Text
+                type="secondary"
+                style={{ marginLeft: 6, cursor: 'pointer' }}
+                onClick={() => navigate(`/stock/${result.code}`)}
+              >
+                {result.code}
+              </Text>
             </div>
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
