@@ -5,7 +5,7 @@ import { SearchOutlined, HistoryOutlined, CloseOutlined, DeleteOutlined, Fullscr
 import { motion } from 'framer-motion'
 import ReactECharts from 'echarts-for-react'
 import { searchStocks, saveSearchKeyword, getSearchHistory, getStockDetail, deleteSearchHistory, deleteSearchKeyword } from '../api'
-import { mobileKlineOption, mobileMacdOption, mobileRsiOption } from '../utils/echartsTheme'
+import { mobileKlineOption } from '../utils/echartsTheme'
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
 import EmptyState from '../components/EmptyState'
 
@@ -30,7 +30,11 @@ const StockSearch: React.FC = () => {
   const [stockDetail, setStockDetail] = useState<any>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [fullScreen, setFullScreen] = useState(false)
-  const [chartTab, setChartTab] = useState<'kline' | 'macd' | 'rsi'>('kline')
+  const chartRef = useRef<any>(null)
+  const [crosshairIdx, setCrosshairIdx] = useState(-1)
+  const chartKdRef = useRef<any[]>([])
+  const visibleHighLowRef = useRef<{ highIdx: number; highVal: number; lowIdx: number; lowVal: number } | null>(null)
+  const dataZoomRangeRef = useRef({ start: 75, end: 100 })
   const [displayCount, setDisplayCount] = useState(SEARCH_PAGE_SIZE)
   const timer = useRef<ReturnType<typeof setTimeout>>()
 
@@ -79,14 +83,92 @@ const StockSearch: React.FC = () => {
   }
 
   const kd = stockDetail?.kline || []
+  const chartKd = useMemo(() => kd.slice(-60), [kd])
+  chartKdRef.current = chartKd
   const today = kd[kd.length - 1]
   const isUp = today && today.pct_chg >= 0
 
-  const chartOptions = {
-    kline: mobileKlineOption(kd.slice(-60)),
-    macd: mobileMacdOption(kd),
-    rsi: mobileRsiOption(kd),
-  }
+  useEffect(() => { setCrosshairIdx(-1) }, [selectedCode])
+
+  const chartReadyHandler = useCallback((echarts: any) => {
+    chartRef.current = echarts
+
+    echarts.on('showTip', (params: any) => {
+      if (params.dataIndex != null) setCrosshairIdx(params.dataIndex)
+    })
+    echarts.on('hideTip', () => setCrosshairIdx(-1))
+
+    echarts.on('dataZoom', () => {
+      if (chartRef.current) chartRef.current.dispatchAction({ type: 'hideTip', seriesIndex: 0 })
+    })
+
+    const updateVisibleRange = () => {
+      const data = chartKdRef.current
+      if (!data.length) return
+      const opt = echarts.getOption()
+      const dz = opt.dataZoom?.[0]
+      if (dz) dataZoomRangeRef.current = { start: dz.start ?? 75, end: dz.end ?? 100 }
+      const total = data.length
+      const startIdx = Math.floor(total * dataZoomRangeRef.current.start / 100)
+      const endIdx = Math.min(total - 1, Math.ceil(total * dataZoomRangeRef.current.end / 100) - 1)
+      if (startIdx > endIdx || endIdx < 0) return
+      let highIdx = startIdx, lowIdx = startIdx
+      for (let i = startIdx; i <= endIdx; i++) {
+        if (data[i].high > data[highIdx].high) highIdx = i
+        if (data[i].low < data[lowIdx].low) lowIdx = i
+      }
+      const hv = data[highIdx].high, lv = data[lowIdx].low
+      visibleHighLowRef.current = { highIdx, highVal: hv, lowIdx, lowVal: lv }
+      chartRef.current?.setOption({
+        series: [{
+          markPoint: {
+            silent: true, symbol: 'none', label: { show: true, fontSize: 11 },
+            data: [
+              { name: `${hv.toFixed(2)} →`, coord: [highIdx, hv], label: { formatter: `${hv.toFixed(2)} →`, position: 'top', distance: 3, color: '#f5222d', fontWeight: 600 } },
+              { name: `← ${lv.toFixed(2)}`, coord: [lowIdx, lv], label: { formatter: `← ${lv.toFixed(2)}`, position: 'bottom', distance: 3, color: '#52c41a', fontWeight: 600 } },
+            ],
+          },
+        }],
+      })
+    }
+    updateVisibleRange()
+    echarts.on('dataZoom', updateVisibleRange)
+  }, [chartKd])
+
+  const crosshairItem = crosshairIdx >= 0 && crosshairIdx < chartKd.length ? chartKd[crosshairIdx] : null
+  const crosshairPrev = crosshairIdx > 0 ? chartKd[crosshairIdx - 1] : null
+  const displayToday = crosshairItem || today
+  const displayPrev = crosshairItem ? crosshairPrev : (kd.length >= 2 ? kd[kd.length - 2] : null)
+  const displayIsUp = crosshairItem
+    ? (crosshairItem.pct_chg ?? (crosshairPrev ? ((crosshairItem.close - crosshairPrev.close) / crosshairPrev.close * 100) : 0)) >= 0
+    : isUp
+  const displayPct = crosshairItem
+    ? (crosshairItem.pct_chg ?? (crosshairPrev ? ((crosshairItem.close - crosshairPrev.close) / crosshairPrev.close * 100) : 0))
+    : today?.pct_chg ?? 0
+  const displayDate = crosshairItem?.date ?? today?.date
+
+  const displayItem = crosshairItem || today
+  const maValues = displayItem ? {
+    ma5: displayItem.MA5,
+    ma10: displayItem.MA10,
+    ma20: displayItem.MA20,
+  } : null
+
+  const chartOption = useMemo(() => {
+    const opt = mobileKlineOption(chartKd, { visibleHighLow: visibleHighLowRef.current })
+    if (opt.dataZoom) {
+      const dz = dataZoomRangeRef.current
+      opt.dataZoom = opt.dataZoom.map((d: any) => ({
+        ...d,
+        start: dz.start,
+        end: dz.end,
+        moveOnMouseMove: true,
+        moveOnMouseWheel: true,
+        zoomOnMouseWheel: true,
+      }))
+    }
+    return opt
+  }, [chartKd])
 
   const paged = useMemo(() => results.slice(0, displayCount), [results, displayCount])
 
@@ -214,7 +296,7 @@ const StockSearch: React.FC = () => {
                 style={{
                   padding: 14,
                   marginBottom: 10,
-                  background: isUp ? 'linear-gradient(135deg, #fff1f0, #ffffff)' : 'linear-gradient(135deg, #f6ffed, #ffffff)',
+                  background: displayIsUp ? 'linear-gradient(135deg, #fff1f0, #ffffff)' : 'linear-gradient(135deg, #f6ffed, #ffffff)',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -222,6 +304,9 @@ const StockSearch: React.FC = () => {
                     <Tag color="blue" style={{ fontSize: 11, margin: 0 }}>{stockDetail.market === 'SH' ? 'SH' : 'SZ'}</Tag>
                     <Text style={{ fontFamily: 'monospace', fontSize: 12, color: '#8e99a4' }}>{stockDetail.code}</Text>
                     <Text strong style={{ fontSize: 16 }}>{stockDetail.name}</Text>
+                    {crosshairItem && (
+                      <Tag color="orange" style={{ fontSize: 10, margin: 0 }}>{displayDate}</Tag>
+                    )}
                   </div>
                   <Space>
                     <Button size="small" icon={<FullscreenOutlined />} onClick={() => setFullScreen(true)} />
@@ -229,16 +314,16 @@ const StockSearch: React.FC = () => {
                   </Space>
                 </div>
 
-                <div style={{ fontSize: 30, fontWeight: 700, color: isUp ? '#f5222d' : '#52c41a' }}>
-                  {today?.close?.toFixed(2) ?? '-'}
+                <div style={{ fontSize: 30, fontWeight: 700, color: displayIsUp ? '#f5222d' : '#52c41a' }}>
+                  {displayToday?.close?.toFixed(2) ?? '-'}
                   <span style={{ fontSize: 13, color: '#8e99a4', fontWeight: 400, marginLeft: 4 }}>元</span>
                 </div>
-                <div style={{ fontSize: 14, color: isUp ? '#f5222d' : '#52c41a', marginBottom: 8 }}>
-                  {isUp ? '+' : ''}{today?.pct_chg?.toFixed(2) ?? '0.00'}%
+                <div style={{ fontSize: 14, color: displayIsUp ? '#f5222d' : '#52c41a', marginBottom: 8 }}>
+                  {displayIsUp ? '+' : ''}{displayPct.toFixed(2)}%
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  {[['今开', today?.open], ['最高', today?.high], ['最低', today?.low], ['昨收', kd[kd.length - 2]?.close], ['成交量', formatVol(today?.volume)]].map(([l, v]) => (
+                  {[['今开', displayToday?.open], ['最高', displayToday?.high], ['最低', displayToday?.low], ['昨收', displayPrev?.close], ['成交量', formatVol(displayToday?.volume)]].map(([l, v]) => (
                     <div key={l as string}>
                       <div style={{ fontSize: 11, color: '#8e99a4' }}>{l}</div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{v != null ? (typeof v === 'number' ? v.toFixed(2) : v) : '-'}</div>
@@ -247,48 +332,29 @@ const StockSearch: React.FC = () => {
                 </div>
               </div>
 
-              {/* Chart tabs */}
-              <div style={{ display: 'flex', gap: 0, marginBottom: 8 }}>
-                {(['kline', 'macd', 'rsi'] as const).map((t) => (
-                  <div
-                    key={t}
-                    onClick={() => setChartTab(t)}
-                    style={{
-                      padding: '6px 16px',
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      borderRadius: 16,
-                      marginRight: 6,
-                      background: chartTab === t ? 'var(--color-primary)' : '#f0f2f5',
-                      color: chartTab === t ? '#fff' : '#8e99a4',
-                      fontWeight: chartTab === t ? 500 : 400,
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {t === 'kline' ? 'K线' : t.toUpperCase()}
+              <div style={{ position: 'relative', marginBottom: 10 }}>
+                {maValues && (
+                  <div style={{
+                    position: 'absolute', top: 4, right: 8, zIndex: 10,
+                    display: 'flex', gap: 8, fontSize: 10, fontWeight: 500,
+                    background: 'rgba(255,255,255,0.85)', borderRadius: 4, padding: '2px 6px',
+                    pointerEvents: 'none',
+                  }}>
+                    <span style={{ color: '#f5222d' }}>MA5: {maValues.ma5?.toFixed(2) ?? '-'}</span>
+                    <span style={{ color: '#fa8c16' }}>MA10: {maValues.ma10?.toFixed(2) ?? '-'}</span>
+                    <span style={{ color: '#722ed1' }}>MA20: {maValues.ma20?.toFixed(2) ?? '-'}</span>
                   </div>
-                ))}
-              </div>
-
-              <motion.div key={chartTab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="chart-box" style={{ padding: '8px 4px', marginBottom: 10, touchAction: 'pan-x pinch-zoom' }}>
+                )}
                 <ReactECharts
-                  option={chartOptions[chartTab]}
-                  style={{ height: fullScreen ? 280 : 220 }}
-                  notMerge
+                  option={chartOption}
+                  style={{ height: fullScreen ? 280 : 220, touchAction: 'none' }}
+                  onChartReady={chartReadyHandler}
                 />
-              </motion.div>
+              </div>
 
               {/* Fullscreen extra */}
               {fullScreen && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 10 }}>
-                    <div className="chart-box" style={{ padding: '4px', touchAction: 'pan-x pinch-zoom' }}>
-                      <ReactECharts option={mobileMacdOption(kd)} style={{ height: 160 }} notMerge />
-                    </div>
-                    <div className="chart-box" style={{ padding: '4px', touchAction: 'pan-x pinch-zoom' }}>
-                      <ReactECharts option={mobileRsiOption(kd)} style={{ height: 160 }} notMerge />
-                    </div>
-                  </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', fontSize: 12, color: '#8e99a4', marginBottom: 8 }}>
                     <span>成交额: <b>{stockDetail.latest.amount ? formatVol(stockDetail.latest.amount) : '-'}</b></span>
                     <span>K值: <b>{stockDetail.latest.K?.toFixed(2) ?? '-'}</b></span>
@@ -298,16 +364,6 @@ const StockSearch: React.FC = () => {
                     <span>布林下轨: <b>{stockDetail.latest.BB_LOWER?.toFixed(2) ?? '-'}</b></span>
                   </div>
                 </motion.div>
-              )}
-
-              {/* Indicators row */}
-              {!fullScreen && stockDetail.latest?.DIF != null && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', fontSize: 11, color: '#8e99a4', marginBottom: 8 }}>
-                  <span>DIF: <b>{stockDetail.latest.DIF.toFixed(4)}</b></span>
-                  <span>DEA: <b>{stockDetail.latest.DEA.toFixed(4)}</b></span>
-                  <span>MACD: <b style={{ color: stockDetail.latest.MACD >= 0 ? '#f5222d' : '#52c41a' }}>{stockDetail.latest.MACD.toFixed(4)}</b></span>
-                  <span>RSI: <b>{stockDetail.latest.RSI?.toFixed(2) ?? '-'}</b></span>
-                </div>
               )}
             </div>
           ) : (

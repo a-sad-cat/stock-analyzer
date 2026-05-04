@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Typography, Tag, Spin, Alert, Space, Button } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import ReactECharts from 'echarts-for-react'
 import { getStockDetail, getResults, getStockSectors } from '../api'
-import { mobileKlineOption, mobileMacdOption, mobileRsiOption } from '../utils/echartsTheme'
+import { mobileKlineOption } from '../utils/echartsTheme'
 
 const { Text } = Typography
 
@@ -77,7 +77,12 @@ const StockDetail: React.FC = () => {
   const [results, setResults] = useState<any[]>([])
   const [stockSectors, setStockSectors] = useState<any[]>([])
   const [chartPeriod, setChartPeriod] = useState<Period>('day')
-  const [chartTab, setChartTab] = useState<'kline' | 'macd' | 'rsi'>('kline')
+
+  const chartRef = useRef<any>(null)
+  const periodDataRef = useRef<any[]>([])
+  const [crosshairIdx, setCrosshairIdx] = useState(-1)
+  const visibleHighLowRef = useRef<{ highIdx: number; highVal: number; lowIdx: number; lowVal: number } | null>(null)
+  const dataZoomRangeRef = useRef({ start: 75, end: 100 })
 
   useEffect(() => {
     if (!code) return
@@ -105,25 +110,108 @@ const StockDetail: React.FC = () => {
   const isUp = today && today.pct_chg >= 0
   const pct = today?.pct_chg || 0
   const periodData = useMemo(() => aggregateKline(kd, chartPeriod), [kd, chartPeriod])
+  periodDataRef.current = periodData
+
+  useEffect(() => { setCrosshairIdx(-1) }, [chartPeriod])
+
+  const chartReadyHandler = useCallback((echarts: any) => {
+    chartRef.current = echarts
+
+    /* Card follow: update when tooltip shows/hides */
+    echarts.on('showTip', (params: any) => {
+      if (params.dataIndex != null) setCrosshairIdx(params.dataIndex)
+    })
+    echarts.on('hideTip', () => setCrosshairIdx(-1))
+
+    /* Auto-dismiss crosshair when user pans/zooms so chart is freely draggable */
+    echarts.on('dataZoom', () => {
+      if (chartRef.current) chartRef.current.dispatchAction({ type: 'hideTip', seriesIndex: 0 })
+    })
+
+    /* Visible high/low markers (on each dataZoom change) */
+    const updateVisibleRange = () => {
+      const data = periodDataRef.current
+      if (!data.length) return
+      const opt = echarts.getOption()
+      const dz = opt.dataZoom?.[0]
+      if (dz) dataZoomRangeRef.current = { start: dz.start ?? 75, end: dz.end ?? 100 }
+      const total = data.length
+      const startIdx = Math.floor(total * dataZoomRangeRef.current.start / 100)
+      const endIdx = Math.min(total - 1, Math.ceil(total * dataZoomRangeRef.current.end / 100) - 1)
+      if (startIdx > endIdx || endIdx < 0) return
+      let highIdx = startIdx, lowIdx = startIdx
+      for (let i = startIdx; i <= endIdx; i++) {
+        if (data[i].high > data[highIdx].high) highIdx = i
+        if (data[i].low < data[lowIdx].low) lowIdx = i
+      }
+      const hv = data[highIdx].high, lv = data[lowIdx].low
+      visibleHighLowRef.current = { highIdx, highVal: hv, lowIdx, lowVal: lv }
+      chartRef.current?.setOption({
+        series: [{
+          markPoint: {
+            silent: true, symbol: 'none', label: { show: true, fontSize: 11 },
+            data: [
+              { name: `${hv.toFixed(2)} →`, coord: [highIdx, hv], label: { formatter: `${hv.toFixed(2)} →`, position: 'top', distance: 3, color: '#f5222d', fontWeight: 600 } },
+              { name: `← ${lv.toFixed(2)}`, coord: [lowIdx, lv], label: { formatter: `← ${lv.toFixed(2)}`, position: 'bottom', distance: 3, color: '#52c41a', fontWeight: 600 } },
+            ],
+          },
+        }],
+      })
+    }
+    updateVisibleRange()
+    echarts.on('dataZoom', updateVisibleRange)
+  }, [])
+
+  const chartOption = useMemo(() => {
+    const opt = mobileKlineOption(periodData, {
+      showMa: chartPeriod === 'day',
+      visibleHighLow: visibleHighLowRef.current,
+    })
+    if (opt.dataZoom) {
+      const dz = dataZoomRangeRef.current
+      opt.dataZoom = opt.dataZoom.map((d: any) => ({
+        ...d,
+        start: dz.start,
+        end: dz.end,
+        moveOnMouseMove: true,
+        moveOnMouseWheel: true,
+        zoomOnMouseWheel: true,
+      }))
+    }
+    return opt
+  }, [periodData, chartPeriod])
 
   if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
   if (!detail || detail.error) return <Alert message="获取数据失败" type="error" showIcon />
 
-  const chartOptions = {
-    kline: mobileKlineOption(periodData, { showMa: chartPeriod === 'day' }),
-    macd: mobileMacdOption(kd),
-    rsi: mobileRsiOption(kd),
-  }
+  const crosshairItem = crosshairIdx >= 0 && crosshairIdx < periodData.length ? periodData[crosshairIdx] : null
+  const crosshairPrev = crosshairIdx > 0 ? periodData[crosshairIdx - 1] : null
+  const displayToday = crosshairItem || today
+  const displayPrev = crosshairItem ? crosshairPrev : prev
+  const displayIsUp = crosshairItem
+    ? (crosshairItem.pct_chg ?? ((crosshairItem.close - (crosshairPrev?.close ?? crosshairItem.close)) / (crosshairPrev?.close || crosshairItem.close) * 100)) >= 0
+    : isUp
+  const displayPct = crosshairItem
+    ? (crosshairItem.pct_chg ?? (crosshairPrev ? ((crosshairItem.close - crosshairPrev.close) / crosshairPrev.close * 100) : 0))
+    : pct
+  const displayDate = crosshairItem?.date ?? today?.date
+
+  const displayItem = crosshairItem || today
+  const maValues = chartPeriod === 'day' ? {
+    ma5: displayItem?.MA5,
+    ma10: displayItem?.MA10,
+    ma20: displayItem?.MA20,
+  } : null
 
   const statGrid = [
-    ['今开', today?.open?.toFixed(2) ?? '-', ''],
-    ['最高', today?.high?.toFixed(2) ?? '-', '#f5222d'],
-    ['成交量', formatVol(today?.volume), ''],
-    ['换手率', latest.turnover_rate ?? '-', ''],
-    ['昨收', prev?.close?.toFixed(2) ?? '-', ''],
-    ['最低', today?.low?.toFixed(2) ?? '-', '#52c41a'],
-    ['成交额', formatMoney(today?.amount), ''],
-    ['市盈(TTM)', latest.pe_ttm ?? '-', ''],
+    ['今开', displayToday?.open?.toFixed(2) ?? '-', ''],
+    ['最高', displayToday?.high?.toFixed(2) ?? '-', '#f5222d'],
+    ['成交量', formatVol(displayToday?.volume), ''],
+    ['换手率', crosshairItem ? '-' : (latest.turnover_rate ?? '-'), ''],
+    ['昨收', displayPrev?.close?.toFixed(2) ?? '-', ''],
+    ['最低', displayToday?.low?.toFixed(2) ?? '-', '#52c41a'],
+    ['成交额', crosshairItem ? (displayToday?.amount ? formatMoney(displayToday.amount) : '-') : formatMoney(today?.amount), ''],
+    ['市盈(TTM)', crosshairItem ? '-' : (latest.pe_ttm ?? '-'), ''],
   ]
 
   return (
@@ -137,7 +225,7 @@ const StockDetail: React.FC = () => {
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         style={{
-          background: isUp
+          background: displayIsUp
             ? 'linear-gradient(135deg, #fff1f0 0%, #ffffff 50%, #fff1f0 100%)'
             : 'linear-gradient(135deg, #f6ffed 0%, #ffffff 50%, #f6ffed 100%)',
           borderRadius: 16,
@@ -146,24 +234,32 @@ const StockDetail: React.FC = () => {
           border: '1px solid var(--color-border)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
           <Tag color="blue" style={{ fontSize: 12, margin: 0 }}>{detail.market === 'SH' ? 'SH' : 'SZ'}</Tag>
           <Text style={{ fontFamily: 'monospace', fontSize: 13, color: '#999' }}>{detail.code}</Text>
           <Text strong style={{ fontSize: 18 }}>{detail.name}</Text>
-          {stockSectors.slice(0, 2).map((s: any) => (
-            <Tag key={s.name} color="purple" style={{ fontSize: 11, margin: 0, cursor: 'pointer' }}
-              onClick={() => navigate(`/sector/${encodeURIComponent(s.name)}?type=${s.type}`)}>
-              {s.name}
-            </Tag>
-          ))}
+          <div style={{ flex: 1 }} />
+          {crosshairItem && (
+            <Tag color="orange" style={{ fontSize: 11, margin: 0 }}>{displayDate}</Tag>
+          )}
         </div>
+        {stockSectors.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+            {stockSectors.slice(0, 6).map((s: any) => (
+              <Tag key={s.name} color="purple" style={{ fontSize: 11, margin: 0, cursor: 'pointer' }}
+                onClick={() => navigate(`/sector/${encodeURIComponent(s.name)}?type=${s.type}`)}>
+                {s.name}
+              </Tag>
+            ))}
+          </div>
+        )}
 
-        <div style={{ fontSize: 36, fontWeight: 700, color: isUp ? '#f5222d' : '#52c41a', marginBottom: 2 }}>
-          {today?.close?.toFixed(2) ?? '-'}
+        <div style={{ fontSize: 36, fontWeight: 700, color: displayIsUp ? '#f5222d' : '#52c41a', marginBottom: 2 }}>
+          {displayToday?.close?.toFixed(2) ?? '-'}
           <span style={{ fontSize: 14, color: '#999', fontWeight: 400, marginLeft: 4 }}>元</span>
         </div>
-        <div style={{ fontSize: 15, color: isUp ? '#f5222d' : '#52c41a', marginBottom: 12 }}>
-          {isUp ? '+' : ''}{pct.toFixed(2)} ({isUp ? '+' : ''}{pct.toFixed(2)}%)
+        <div style={{ fontSize: 15, color: displayIsUp ? '#f5222d' : '#52c41a', marginBottom: 12 }}>
+          {displayIsUp ? '+' : ''}{displayPct.toFixed(2)} ({displayIsUp ? '+' : ''}{displayPct.toFixed(2)}%)
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px 4px' }}>
@@ -187,7 +283,7 @@ const StockDetail: React.FC = () => {
         {PERIODS.map((p) => (
           <div
             key={p.key}
-            onClick={() => { setChartPeriod(p.key); setChartTab('kline') }}
+            onClick={() => { setChartPeriod(p.key) }}
             style={{
               padding: '6px 12px',
               cursor: 'pointer',
@@ -204,43 +300,26 @@ const StockDetail: React.FC = () => {
         ))}
       </div>
 
-      {/* Chart tab switcher */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 8 }}>
-        {(['kline', 'macd', 'rsi'] as const).map((t) => (
-          <div
-            key={t}
-            onClick={() => setChartTab(t)}
-            style={{
-              padding: '5px 14px',
-              cursor: 'pointer',
-              fontSize: 12,
-              borderRadius: 14,
-              marginRight: 6,
-              background: chartTab === t ? '#1677ff' : '#f5f5f5',
-              color: chartTab === t ? '#fff' : '#666',
-              fontWeight: chartTab === t ? 500 : 400,
-              transition: 'all 0.15s',
-            }}
-          >
-            {t === 'kline' ? 'K线' : t.toUpperCase()}
-          </div>
-        ))}
-      </div>
-
       {/* Chart */}
-      <motion.div
-        key={chartTab}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="chart-box"
-        style={{ padding: '8px 4px', marginBottom: 12, touchAction: 'pan-x pinch-zoom' }}
-      >
+      <div style={{ position: 'relative', marginBottom: 12 }}>
+        {maValues && (
+          <div style={{
+            position: 'absolute', top: 4, right: 8, zIndex: 10,
+            display: 'flex', gap: 8, fontSize: 10, fontWeight: 500,
+            background: 'rgba(255,255,255,0.85)', borderRadius: 4, padding: '2px 6px',
+            pointerEvents: 'none',
+          }}>
+            <span style={{ color: '#f5222d' }}>MA5: {maValues.ma5?.toFixed(2) ?? '-'}</span>
+            <span style={{ color: '#fa8c16' }}>MA10: {maValues.ma10?.toFixed(2) ?? '-'}</span>
+            <span style={{ color: '#722ed1' }}>MA20: {maValues.ma20?.toFixed(2) ?? '-'}</span>
+          </div>
+        )}
         <ReactECharts
-          option={chartOptions[chartTab]}
-          style={{ height: chartTab === 'kline' ? 300 : 200 }}
-          notMerge
+          option={chartOption}
+          style={{ height: 300, touchAction: 'none' }}
+          onChartReady={chartReadyHandler}
         />
-      </motion.div>
+      </div>
 
       {/* Strategy signals */}
       {results.length > 0 && (
