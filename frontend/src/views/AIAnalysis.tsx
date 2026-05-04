@@ -130,26 +130,36 @@ const AIAnalysis: React.FC = () => {
     <div style={{ maxWidth: 800, margin: '0 auto' }}>
       {/* ======== 顶部：搜索 + 选择区 ======== */}
       <Card size="small" styles={{ body: { padding: 16 } }} style={CARD_STYLE}>
-        {/* 搜索栏 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        {/* 标题行 */}
+        <div style={{ marginBottom: 12 }}>
           <RobotOutlined style={{ color: '#1677ff', fontSize: 16 }} />
-          <Text strong style={{ fontSize: 15 }}>AI 智能分析</Text>
-          {llmStatus && (
-            <Tag color={llmStatus.available ? 'success' : 'error'} style={{ marginLeft: 'auto', fontSize: 11 }}>
-              {llmStatus.available ? llmStatus.model : '未配置'}
-            </Tag>
-          )}
+          <Text strong style={{ fontSize: 15, marginLeft: 6 }}>AI 智能分析</Text>
         </div>
 
-        <Input.Search
-          placeholder="输入股票代码或名称搜索..."
-          value={searchKeyword}
-          onChange={e => setSearchKeyword(e.target.value)}
-          onSearch={v => handleSearch(v)}
-          loading={searchLoading}
-          size="large"
-          style={{ marginBottom: 8 }}
-        />
+        {/* 搜索栏 */}
+        <div style={{ position: 'relative' }}>
+          <Input
+            placeholder="输入股票代码或名称搜索..."
+            value={searchKeyword}
+            onChange={e => setSearchKeyword(e.target.value)}
+            onPressEnter={() => handleSearch(searchKeyword)}
+            size="large"
+            suffix={
+              searchLoading ? (
+                <Spin size="small" />
+              ) : (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<SearchOutlined />}
+                  onClick={() => handleSearch(searchKeyword)}
+                  style={{ borderRadius: 6, minWidth: 32 }}
+                />
+              )
+            }
+            style={{ borderRadius: 10, paddingRight: 4 }}
+          />
+        </div>
 
         {/* 搜索结果 */}
         {searchResults.length > 0 && (
