@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Menu } from 'antd'
 import {
   DashboardOutlined, FundOutlined, AuditOutlined, StockOutlined,
-  SearchOutlined, FireOutlined, BarChartOutlined,
+  SearchOutlined, FireOutlined, BarChartOutlined, RobotOutlined,
 } from '@ant-design/icons'
 
 interface SidebarProps {
@@ -40,6 +40,11 @@ const menuItems = [
     key: '/backtest',
     icon: <BarChartOutlined />,
     label: '策略回测',
+  },
+  {
+    key: '/llm',
+    icon: <RobotOutlined />,
+    label: 'AI 分析',
   },
 ]
 

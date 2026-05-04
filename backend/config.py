@@ -36,3 +36,26 @@ CACHE_EXPIRE_HOURS = 48
 # 0 表示扫描全部股票
 MAX_SCAN_STOCKS = 200
 SCAN_WORKERS = 8
+
+# ========================================
+# LLM AI 分析配置（默认：DeepSeek，国内直连 + 免费额度）
+# ========================================
+# API Key（获取: https://platform.deepseek.com）
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
+# LLM Provider: openai（DeepSeek 兼容 OpenAI 接口）
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "openai")
+# LLM 模型名称
+LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-chat")
+# Base URL（DeepSeek 官方 OpenAI 兼容端点）
+LLM_BASE_URL = os.environ.get(
+    "LLM_BASE_URL",
+    "https://api.deepseek.com"
+)
+# 请求超时（秒）
+LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "60"))
+# 采样温度 (0.0-2.0, 0=确定性最高)
+LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.7"))
+# 最大输出 token 数
+LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "2048"))
+# 最大重试次数
+LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "2"))

@@ -31,7 +31,7 @@ try:
 except Exception:
     pass
 
-from routers import stocks, strategies, sectors, backtest
+from routers import stocks, strategies, sectors, backtest, llm_analysis
 from database import engine, Base
 from services.data_service import _get_spot_map
 from services.sector_service import refresh_sectors, rebuild_sector_map, build_stock_sectors_map
@@ -81,6 +81,7 @@ app.include_router(stocks.router, prefix="/api/stocks", tags=["股票数据"])
 app.include_router(strategies.router, prefix="/api/strategies", tags=["策略管理"])
 app.include_router(sectors.router, prefix="/api/sectors", tags=["板块热度"])
 app.include_router(backtest.router, prefix="/api/backtest", tags=["策略回测"])
+app.include_router(llm_analysis.router, prefix="/api/llm", tags=["LLM AI分析"])
 
 
 def _warm_cache():
