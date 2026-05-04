@@ -81,6 +81,8 @@ def _execute_backtest(db, run_id, strategy_id, strategy_obj, start_date, end_dat
     # 获取全市场股票列表
     all_stocks = get_all_stocks()
     all_stocks = [s for s in all_stocks if not s.get("name", "").startswith(("ST", "*ST"))]
+    # 过滤北交所/科创/创业板，仅保留沪市主板+深市主板
+    all_stocks = [s for s in all_stocks if not s.get("code", "").lower().startswith(('4', '8', '92', 'bj', '688', '300'))]
     if stock_limit and len(all_stocks) > stock_limit:
         all_stocks = all_stocks[:stock_limit]
     total_stocks = len(all_stocks)

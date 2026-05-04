@@ -384,11 +384,11 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 0, top_k: int
     before_filter = len(all_stocks)
     all_stocks = [
         s for s in all_stocks
-        if not s.get('code', '').lower().startswith(('4', '8', '92', 'bj'))
+        if not s.get('code', '').lower().startswith(('4', '8', '92', 'bj', '688', '300'))
     ]
     filtered = before_filter - len(all_stocks)
     if filtered:
-        logger.info(f"过滤掉 {filtered} 只北交所股票（仅扫描沪市+深市）")
+        logger.info(f"过滤掉 {filtered} 只北交所/科创/创业板股票（仅扫描沪市主板+深市主板）")
 
     if strategy.type == "builtin" and strategy.id in _builtin_strategies:
         strategy_obj = _builtin_strategies[strategy.id]
@@ -518,6 +518,8 @@ def run_strategy_for_hot_sectors(db: Session, strategy_id: int | None = None, he
         codes = get_sector_stocks(h["name"], h.get("sector_type", "industry"))
         if not codes:
             continue
+        # 过滤北交所/科创/创业板，仅保留沪市主板+深市主板
+        codes = [c for c in codes if not c.lower().startswith(('4', '8', '92', 'bj', '688', '300'))]
         codes = codes[:per_sector_limit]
         for code in codes:
             if code in scanned_codes:
