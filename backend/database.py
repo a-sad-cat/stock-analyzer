@@ -5,11 +5,32 @@
 # ========================================
 """
 
+import time
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from config import DATABASE_URL
+
+# ---------- SQLite 锁重试工具 ----------
+SQLITE_RETRY_COUNT = 5
+SQLITE_RETRY_BASE_DELAY = 0.1
+
+
+def with_sqlite_retry(fn, *args, **kwargs):
+    """对 SQLite database is locked 错误自动重试（指数退避）"""
+    from sqlalchemy.exc import OperationalError
+    last_err = None
+    for attempt in range(SQLITE_RETRY_COUNT):
+        try:
+            return fn(*args, **kwargs)
+        except OperationalError as e:
+            if "database is locked" not in str(e).lower():
+                raise
+            last_err = e
+            delay = SQLITE_RETRY_BASE_DELAY * (2 ** attempt)
+            time.sleep(delay)
+    raise last_err if last_err else RuntimeError("unknown retry failure")
 
 _is_sqlite = DATABASE_URL.startswith("sqlite")
 connect_args = {"check_same_thread": False} if _is_sqlite else {}

@@ -7,6 +7,8 @@
 
 import logging
 import json
+import threading
+import time
 from datetime import datetime, date
 from typing import Optional
 
@@ -18,7 +20,7 @@ from .base import BaseStrategy
 from .builtin import get_builtin_strategies
 from models.strategy import Strategy, StrategyResult
 from services.data_service import get_all_stocks, get_daily_data
-from database import SessionLocal
+from database import SessionLocal, with_sqlite_retry
 
 logger = logging.getLogger(__name__)
 
@@ -406,7 +408,7 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 0, top_k: int
         StrategyResult.strategy_id == strategy_id,
         StrategyResult.created_at >= datetime.now().strftime("%Y-%m-%d")
     ).delete()
-    db.commit()
+    with_sqlite_retry(db.commit)
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from config import SCAN_WORKERS
@@ -447,9 +449,9 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 0, top_k: int
                 ))
                 results.append(r)
                 if len(results) % 50 == 0:
-                    db.commit()
+                    with_sqlite_retry(db.commit)
 
-    db.commit()
+    with_sqlite_retry(db.commit)
 
     strategy.last_run = datetime.now()
     db.commit()
@@ -460,35 +462,46 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 0, top_k: int
     return top
 
 
+# 全局扫描互斥锁：禁止启动补扫 + 用户手动重扫 + 定时任务三种场景并发扫描
+_scan_lock = threading.Lock()
+
+
 def run_all_strategies(db: Session, stock_limit: int = 0, top_k: int = 50) -> dict:
-    """运行所有启用的策略"""
-    if not _builtin_strategies:
-        _init_builtin_strategies(db)
+    """运行所有启用的策略（同一时间只允许一个全市场扫描）"""
+    if not _scan_lock.acquire(blocking=False):
+        logger.warning("全市场扫描已在运行中，跳过本次请求")
+        return {}
 
-    strategies = db.query(Strategy).filter(Strategy.enabled == 1).all()
-    all_results = {}
+    try:
+        if not _builtin_strategies:
+            _init_builtin_strategies(db)
 
-    for strategy in strategies:
-        try:
-            results = run_strategy(db, strategy.id, stock_limit, top_k)
-            all_results[strategy.id] = {
-                "strategy_name": strategy.name,
-                "count": len(results),
-                "results": results,
-            }
-        except Exception as e:
-            logger.error(f"运行策略 [{strategy.name}] 失败: {e}")
-            all_results[strategy.id] = {
-                "strategy_name": strategy.name,
-                "count": 0,
-                "results": [],
-                "error": str(e),
-            }
+        strategies = db.query(Strategy).filter(Strategy.enabled == 1).all()
+        all_results = {}
 
-    from services.data_service import _flush_fetch_log
+        for strategy in strategies:
+            try:
+                results = run_strategy(db, strategy.id, stock_limit, top_k)
+                all_results[strategy.id] = {
+                    "strategy_name": strategy.name,
+                    "count": len(results),
+                    "results": results,
+                }
+            except Exception as e:
+                logger.error(f"运行策略 [{strategy.name}] 失败: {e}")
+                all_results[strategy.id] = {
+                    "strategy_name": strategy.name,
+                    "count": 0,
+                    "results": [],
+                    "error": str(e),
+                }
 
-    _flush_fetch_log()
-    return all_results
+        from services.data_service import _flush_fetch_log
+
+        _flush_fetch_log()
+        return all_results
+    finally:
+        _scan_lock.release()
 
 
 def run_strategy_for_hot_sectors(db: Session, strategy_id: int | None = None, heat_threshold: float = 60, per_sector_limit: int = 20) -> list[dict]:

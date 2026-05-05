@@ -49,6 +49,15 @@ const Backtest: React.FC = () => {
     { type: 'breakeven_exit', min_hold: 5, enabled: true },
     { type: 'max_hold', days: 20, enabled: true },
   ])
+  const [showExitParams, setShowExitParams] = useState(false)
+  const [exitParams, setExitParams] = useState({
+    stop_loss: -7,
+    trailing_activate: 8,
+    trailing_pullback: 3,
+    ma_break: 10,
+    breakeven_min_hold: 5,
+    max_hold: 20,
+  })
   const [running, setRunning] = useState(false)
   const [currentRun, setCurrentRun] = useState<any>(null)
   const [runs, setRuns] = useState<any[]>([])
@@ -109,14 +118,21 @@ const Backtest: React.FC = () => {
     setRunning(true)
     setCurrentRun(null)
     try {
-      const enabledRules = exitRules.filter((r) => r.enabled)
+      const enabledRules = exitRules.filter((r) => r.enabled).map(({ enabled, ...rule }) => {
+        if (rule.type === 'stop_loss') return { ...rule, pct: exitParams.stop_loss }
+        if (rule.type === 'trailing_stop') return { ...rule, activate: exitParams.trailing_activate, pullback: exitParams.trailing_pullback }
+        if (rule.type === 'ma_break') return { ...rule, ma: exitParams.ma_break }
+        if (rule.type === 'breakeven_exit') return { ...rule, min_hold: exitParams.breakeven_min_hold }
+        if (rule.type === 'max_hold') return { ...rule, days: exitParams.max_hold }
+        return rule
+      })
       const res = await runBacktest({
         strategy_id: selectedStrategy,
         start_date: dateRange[0].format('YYYY-MM-DD'),
         end_date: dateRange[1].format('YYYY-MM-DD'),
         stock_limit: stockLimit,
         min_score: minScore,
-        exit_rules: enabledRules.map(({ enabled, ...rule }) => rule),
+        exit_rules: enabledRules,
       })
       if (res.run_id) {
         setSelectedRun(res.run_id)
@@ -231,6 +247,55 @@ const Backtest: React.FC = () => {
                 </Tag>
               ))}
             </Space>
+            <a onClick={() => setShowExitParams(!showExitParams)} style={{ fontSize: 11, marginTop: 4, display: 'inline-block' }}>
+              {showExitParams ? '收起参数调节' : '展开参数调节'}
+            </a>
+            {showExitParams && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 6 }}>
+                {exitRules.find(r => r.type === 'stop_loss')?.enabled && (
+                  <div>
+                    <Text style={{ fontSize: 11, color: '#999', display: 'block' }}>止损 (%)</Text>
+                    <InputNumber style={{ width: '100%' }} size="small" min={-30} max={-1} step={1}
+                      value={exitParams.stop_loss} onChange={(v) => setExitParams({ ...exitParams, stop_loss: v || -7 })} />
+                  </div>
+                )}
+                {exitRules.find(r => r.type === 'trailing_stop')?.enabled && (
+                  <>
+                    <div>
+                      <Text style={{ fontSize: 11, color: '#999', display: 'block' }}>止盈激活 (%)</Text>
+                      <InputNumber style={{ width: '100%' }} size="small" min={1} max={30} step={0.5}
+                        value={exitParams.trailing_activate} onChange={(v) => setExitParams({ ...exitParams, trailing_activate: v || 8 })} />
+                    </div>
+                    <div>
+                      <Text style={{ fontSize: 11, color: '#999', display: 'block' }}>回撤容忍 (%)</Text>
+                      <InputNumber style={{ width: '100%' }} size="small" min={0.5} max={10} step={0.5}
+                        value={exitParams.trailing_pullback} onChange={(v) => setExitParams({ ...exitParams, trailing_pullback: v || 3 })} />
+                    </div>
+                  </>
+                )}
+                {exitRules.find(r => r.type === 'ma_break')?.enabled && (
+                  <div>
+                    <Text style={{ fontSize: 11, color: '#999', display: 'block' }}>均线周期</Text>
+                    <InputNumber style={{ width: '100%' }} size="small" min={5} max={60} step={5}
+                      value={exitParams.ma_break} onChange={(v) => setExitParams({ ...exitParams, ma_break: v || 10 })} />
+                  </div>
+                )}
+                {exitRules.find(r => r.type === 'breakeven_exit')?.enabled && (
+                  <div>
+                    <Text style={{ fontSize: 11, color: '#999', display: 'block' }}>最小持有 (天)</Text>
+                    <InputNumber style={{ width: '100%' }} size="small" min={1} max={15} step={1}
+                      value={exitParams.breakeven_min_hold} onChange={(v) => setExitParams({ ...exitParams, breakeven_min_hold: v || 5 })} />
+                  </div>
+                )}
+                {exitRules.find(r => r.type === 'max_hold')?.enabled && (
+                  <div>
+                    <Text style={{ fontSize: 11, color: '#999', display: 'block' }}>最大持有 (天)</Text>
+                    <InputNumber style={{ width: '100%' }} size="small" min={5} max={60} step={5}
+                      value={exitParams.max_hold} onChange={(v) => setExitParams({ ...exitParams, max_hold: v || 20 })} />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <Button type="primary" icon={<PlayCircleOutlined />} onClick={handleRun} loading={running} block disabled={!selectedStrategy}>
             运行回测
@@ -246,9 +311,15 @@ const Backtest: React.FC = () => {
             {[
               ['信号', currentRun.total_signals, '次', undefined],
               ['胜率', currentRun.win_rate, '%', currentRun.win_rate >= 50 ? '#f5222d' : '#52c41a'],
-              ['平均收益', currentRun.avg_return, '%', currentRun.avg_return >= 0 ? '#f5222d' : '#52c41a'],
+              ['累计收益', currentRun.total_return_pct, '%', currentRun.total_return_pct >= 0 ? '#f5222d' : '#52c41a'],
               ['最大回撤', currentRun.max_drawdown, '%', '#fa8c16'],
-              ['盈亏比', currentRun.profit_loss_ratio, '', currentRun.profit_loss_ratio >= 1.5 ? '#f5222d' : '#999'],
+              ['夏普比率', currentRun.sharpe_ratio, '', (currentRun.sharpe_ratio || 0) >= 1 ? '#f5222d' : (currentRun.sharpe_ratio || 0) >= 0 ? '#333' : '#52c41a'],
+              ['卡尔玛', currentRun.calmar_ratio, '', (currentRun.calmar_ratio || 0) >= 0.5 ? '#f5222d' : '#999'],
+              ['年化收益', currentRun.annualized_return, '%', (currentRun.annualized_return || 0) >= 0 ? '#f5222d' : '#52c41a'],
+              ['盈亏比', currentRun.profit_loss_ratio, '', (currentRun.profit_loss_ratio || 0) >= 1.5 ? '#f5222d' : '#999'],
+              ['Alpha', currentRun.alpha, '%', (currentRun.alpha || 0) >= 0 ? '#f5222d' : '#52c41a'],
+              ['基准收益', currentRun.benchmark_return, '%', (currentRun.benchmark_return || 0) >= 0 ? '#f5222d' : '#52c41a'],
+              ['波动率', currentRun.annualized_volatility, '%', undefined],
               ['平均持有', currentRun.avg_hold_days, '天', undefined],
             ].map(([title, val, unit, color]) => (
               <div key={title as string} className="card-mobile" style={{ padding: '10px 12px', textAlign: 'center' }}>

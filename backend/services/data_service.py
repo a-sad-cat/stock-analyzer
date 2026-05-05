@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from models.stock import Stock, StockDaily
-from database import SessionLocal
+from database import SessionLocal, with_sqlite_retry
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +289,7 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
                     return df_result
                 df_result = _add_technical_indicators(df_result)
                 _save_daily_data(db, code, df_result.reset_index())
+                with_sqlite_retry(db.commit)
                 return df_result
 
         import akshare as ak
@@ -357,6 +358,7 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
 
         # 保存到数据库
         _save_daily_data(db, code, df)
+        with_sqlite_retry(db.commit)
 
         # 从数据库重新读取
         records = db.query(StockDaily).filter(
@@ -383,6 +385,7 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
             df_result = df_result[~df_result.index.duplicated(keep='first')]
         df_result = _add_technical_indicators(df_result)
         _save_daily_data(db, code, df_result.reset_index())
+        with_sqlite_retry(db.commit)
         return df_result
 
     finally:

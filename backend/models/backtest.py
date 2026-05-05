@@ -27,6 +27,12 @@ class BacktestRun(Base):
     max_drawdown = Column(Float, default=0, comment="最大回撤")
     avg_hold_days = Column(Float, default=0, comment="平均持有天数")
     profit_loss_ratio = Column(Float, default=0, comment="盈亏比")
+    annualized_return = Column(Float, default=0, comment="年化收益率(%)")
+    annualized_volatility = Column(Float, default=0, comment="年化波动率(%)")
+    sharpe_ratio = Column(Float, default=0, comment="夏普比率")
+    calmar_ratio = Column(Float, default=0, comment="卡尔玛比率")
+    benchmark_return = Column(Float, default=0, comment="基准收益(%)")
+    alpha = Column(Float, default=0, comment="超额收益Alpha(%)")
 
     exit_reason_dist = Column(JSON, default=dict, comment="退出原因分布")
     regime_breakdown = Column(JSON, default=dict, comment="市场环境分组统计")
@@ -54,7 +60,8 @@ class BacktestTrade(Base):
 
     exit_date = Column(Date, nullable=True, comment="退出日期")
     exit_price = Column(Float, default=0, comment="退出价格")
-    holding_return = Column(Float, default=0, comment="持仓收益率")
+    holding_return = Column(Float, default=0, comment="持仓净收益率(扣费后)")
+    gross_return = Column(Float, default=0, comment="持仓毛收益率(扣费前)")
     max_drawdown = Column(Float, default=0, comment="持仓期最大回撤")
     peak_return = Column(Float, default=0, comment="持仓期最高浮盈")
     hold_days = Column(Integer, default=0, comment="持有天数")

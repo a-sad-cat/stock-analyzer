@@ -63,3 +63,15 @@ def has_consecutive_outflow(df: pd.DataFrame, threshold: int = 3, min_strength: 
     """连续 N 日主力资金持续流出"""
     flow = estimate_capital_flow(df, lookback=threshold + 2)
     return flow["consecutive"] >= threshold and flow["strength"] <= min_strength
+
+
+def precompute_outflow_flags(df: pd.DataFrame, threshold: int = 3) -> list[bool]:
+    """预计算整条K线每个位置的流出标记，供 _simulate_exit O(1) 查询
+    对每个 i (i >= 5), 判断 df.iloc[i-5:i+1] 内是否存在持续流出
+    """
+    n = len(df)
+    flags = [False] * n
+    for i in range(5, n):
+        window = df.iloc[i - 5:i + 1]
+        flags[i] = has_consecutive_outflow(window, threshold=threshold)
+    return flags
