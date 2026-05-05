@@ -269,6 +269,37 @@ def get_all_stocks(db: Session = None) -> list[dict]:
             db.close()
 
 
+def _records_to_dataframe(db, code, records, start_dt, end_dt) -> pd.DataFrame:
+    """将 DB 中的 StockDaily 记录转为 DataFrame，必要时补算技术指标"""
+    if not records:
+        return pd.DataFrame()
+    data = {
+        'date': [r.date for r in records],
+        'open': [r.open for r in records],
+        'high': [r.high for r in records],
+        'low': [r.low for r in records],
+        'close': [r.close for r in records],
+        'volume': [r.volume for r in records],
+        'amount': [r.amount for r in records],
+        'pct_chg': [r.pct_chg for r in records],
+    }
+    for df_col, db_col in INDICATOR_MAP.items():
+        vals = [getattr(r, db_col) for r in records]
+        if any(v is not None for v in vals):
+            data[df_col] = vals
+    df_result = pd.DataFrame(data).set_index('date')
+    if df_result.index.duplicated().any():
+        df_result = df_result[~df_result.index.duplicated(keep='first')]
+    if 'MA5' in data:
+        return df_result
+    df_result = _add_technical_indicators(df_result)
+    def _save_batch():
+        _save_daily_data(db, code, df_result.reset_index())
+        db.commit()
+    with_db_write_lock(_save_batch)
+    return df_result
+
+
 def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
     """
     获取个股日K线数据（从AKShare获取，缓存到本地数据库）
@@ -291,33 +322,7 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
                 StockDaily.date >= start_dt,
                 StockDaily.date <= end_dt
             ).order_by(StockDaily.date.asc()).all()
-            if records:
-                data = {
-                    'date': [r.date for r in records],
-                    'open': [r.open for r in records],
-                    'high': [r.high for r in records],
-                    'low': [r.low for r in records],
-                    'close': [r.close for r in records],
-                    'volume': [r.volume for r in records],
-                    'amount': [r.amount for r in records],
-                    'pct_chg': [r.pct_chg for r in records],
-                }
-                for df_col, db_col in INDICATOR_MAP.items():
-                    vals = [getattr(r, db_col) for r in records]
-                    if any(v is not None for v in vals):
-                        data[df_col] = vals
-                df_result = pd.DataFrame(data).set_index('date')
-                if df_result.index.duplicated().any():
-                    df_result = df_result[~df_result.index.duplicated(keep='first')]
-                # 如果 DB 里有缓存指标，跳过重新计算
-                if 'MA5' in data:
-                    return df_result
-                df_result = _add_technical_indicators(df_result)
-                def _save_batch2():
-                    _save_daily_data(db, code, df_result.reset_index())
-                    db.commit()
-                with_db_write_lock(_save_batch2)
-                return df_result
+            return _records_to_dataframe(db, code, records, start_dt, end_dt)
 
         import akshare as ak
 
@@ -328,9 +333,28 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
                 bare_code = bare_code[len(prefix):]
                 break
 
-        logger.debug(f"从 AKShare 获取 {code} 的日K数据...")
+        # ---- 增量拉取：只拉缺失的新日期，不全量重拉历史 ----
+        last_cached = db.query(StockDaily).filter(
+            StockDaily.code == code
+        ).order_by(StockDaily.date.desc()).first()
+
+        if last_cached and last_cached.date >= start_dt - timedelta(days=10):
+            # 已有足够历史数据，仅拉取最新缺失的日期
+            fetch_start = (last_cached.date + timedelta(days=1)).strftime("%Y%m%d")
+            if datetime.strptime(fetch_start, "%Y%m%d").date() >= end_dt:
+                # 没有新数据需要拉取，直接读缓存返回
+                records = db.query(StockDaily).filter(
+                    StockDaily.code == code,
+                    StockDaily.date >= start_dt,
+                    StockDaily.date <= end_dt
+                ).order_by(StockDaily.date.asc()).all()
+                return _records_to_dataframe(db, code, records, start_dt, end_dt)
+        else:
+            fetch_start = start_date  # 首次或历史数据不足，全量拉取
+
+        logger.debug(f"从 AKShare 获取 {code} 的日K数据 ({fetch_start}~{end_date})...")
         _log_fetch(code)
-        time.sleep(0.05)  # AKShare 反爬间隔（原 0.3s，8 workers 下可大幅降低）
+        time.sleep(0.05)  # AKShare 反爬间隔
 
         # 检查数据库中存储的市场信息
         try:
@@ -354,14 +378,14 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
 
         try:
             df = ak.stock_zh_a_daily(symbol=f"{market_prefix}{bare_code}",
-                                     start_date=start_date, end_date=end_date)
+                                     start_date=fetch_start, end_date=end_date)
         except Exception as e:
             logger.warning(f"获取 {code} 数据失败: {e}")
 
             if market_prefix != 'sz':
                 try:
                     df = ak.stock_zh_a_daily(symbol=f"sz{bare_code}",
-                                             start_date=start_date, end_date=end_date)
+                                             start_date=fetch_start, end_date=end_date)
                     logger.info(f"  → 降级到 sz 前缀成功")
                 except Exception:
                     return pd.DataFrame()
@@ -395,29 +419,7 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
             StockDaily.date >= start_dt,
             StockDaily.date <= end_dt
         ).order_by(StockDaily.date.asc()).all()
-
-        if not records:
-            return pd.DataFrame()
-
-        data = {
-            'date': [r.date for r in records],
-            'open': [float(r.open) if r.open else 0 for r in records],
-            'high': [float(r.high) if r.high else 0 for r in records],
-            'low': [float(r.low) if r.low else 0 for r in records],
-            'close': [float(r.close) if r.close else 0 for r in records],
-            'volume': [float(r.volume) if r.volume else 0 for r in records],
-            'amount': [float(r.amount) if r.amount else 0 for r in records],
-            'pct_chg': [float(r.pct_chg) if r.pct_chg else 0 for r in records],
-        }
-        df_result = pd.DataFrame(data).set_index('date')
-        if df_result.index.duplicated().any():
-            df_result = df_result[~df_result.index.duplicated(keep='first')]
-        df_result = _add_technical_indicators(df_result)
-        def _save_batch3():
-            _save_daily_data(db, code, df_result.reset_index())
-            db.commit()
-        with_db_write_lock(_save_batch3)
-        return df_result
+        return _records_to_dataframe(db, code, records, start_dt, end_dt)
 
     finally:
         db.close()
