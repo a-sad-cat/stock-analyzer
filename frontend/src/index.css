@@ -149,3 +149,10 @@ input, select, textarea {
   overflow: hidden;
   border: 1px solid var(--color-border);
 }
+
+/* 修复 Select 下拉菜单滚动穿透问题 (移动端) */
+.ant-select-dropdown .rc-virtual-list-holder,
+.ant-select-dropdown .rc-virtual-list-holder-inner {
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}

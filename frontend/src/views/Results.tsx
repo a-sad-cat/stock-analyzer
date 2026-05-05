@@ -217,10 +217,12 @@ const Results: React.FC = () => {
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <Text style={{ fontSize: 11, color: '#8e99a4', flexShrink: 0, width: 28 }}>策略</Text>
               <Select
+                showSearch
                 size="small" placeholder="全部" allowClear value={selectedStrategy}
                 onChange={(v) => setParam('strategy', v)}
                 style={{ flex: 1, minWidth: 100 }}
                 variant="filled"
+                filterOption={(input, option) => (option?.label as string)?.includes(input)}
                 options={strategies.map((s: any) => ({ value: s.id, label: s.name }))}
               />
             </div>
@@ -235,9 +237,11 @@ const Results: React.FC = () => {
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <Text style={{ fontSize: 11, color: '#8e99a4', flexShrink: 0, width: 28 }}>行业</Text>
               <Select
+                showSearch
                 size="small" placeholder="全部" allowClear value={sectorFilter}
                 onChange={(v) => setParam('sector', v)}
                 style={{ flex: 1, minWidth: 100 }} variant="filled"
+                filterOption={(input, option) => (option?.label as string)?.includes(input)}
                 options={allSectors.map((s) => ({ value: s, label: s }))}
               />
             </div>

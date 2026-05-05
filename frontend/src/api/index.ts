@@ -59,10 +59,12 @@ export const searchStocks = async (keyword: string) => {
   return res.data
 }
 
-/** 获取个股详情 */
+/** 获取个股详情（缓存 2 分钟，并发请求自动去重） */
 export const getStockDetail = async (code: string) => {
-  const res = await api.get(`/stocks/${code}/detail`)
-  return res.data
+  return withCache(`stockDetail:${code}`, async () => {
+    const res = await api.get(`/stocks/${code}/detail`)
+    return res.data
+  })
 }
 
 /** 获取K线数据 */
@@ -205,10 +207,12 @@ export const getSectorDetail = async (name: string, sectorType = 'concept') => {
   return res.data
 }
 
-/** 获取股票所属板块 */
+/** 获取股票所属板块（缓存 2 分钟，并发请求自动去重） */
 export const getStockSectors = async (code: string) => {
-  const res = await api.get(`/stocks/${code}/sectors`)
-  return res.data
+  return withCache(`stockSectors:${code}`, async () => {
+    const res = await api.get(`/stocks/${code}/sectors`)
+    return res.data
+  })
 }
 
 /** 批量获取多只股票所属板块（推荐使用，替代逐个调用 getStockSectors） */

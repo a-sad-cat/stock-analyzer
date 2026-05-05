@@ -15,29 +15,8 @@ const tabs = [
     ),
   },
   {
-    key: '/search',
-    label: '搜索',
-    icon: (active: boolean, color: string) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <circle cx="11" cy="11" r="7.5" stroke={color} strokeWidth="1.6" />
-        <path d="M16.5 16.5l5 5" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    key: '/strategies',
-    label: '策略',
-    icon: (active: boolean, color: string) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-          stroke={color} strokeWidth="1.6" fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0}
-          strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
     key: '/results',
-    label: '结果',
+    label: '扫描结果',
     icon: (active: boolean, color: string) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke={color} strokeWidth="1.6"
@@ -50,7 +29,6 @@ const tabs = [
     label: 'AI分析',
     icon: (active: boolean, color: string) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        {/* 芯片/AI 图标 */}
         <rect x="4" y="4" width="16" height="16" rx="4" stroke={color} strokeWidth="1.6"
           fill={active ? color : 'none'} fillOpacity={active ? 0.12 : 0} />
         <rect x="8" y="8" width="8" height="8" rx="2" stroke={color} strokeWidth="1.6"
@@ -59,6 +37,28 @@ const tabs = [
           fill={active ? '#fff' : 'none'} />
         <path d="M12 2v2M12 20v2M2 12h2M20 12h2" stroke={color} strokeWidth="1.2"
           strokeLinecap="round" opacity={0.5} />
+      </svg>
+    ),
+  },
+  {
+    key: '/backtest',
+    label: '回测',
+    icon: (active: boolean, color: string) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="3" width="18" height="18" rx="3" stroke={color} strokeWidth="1.6"
+          fill={active ? color : 'none'} fillOpacity={active ? 0.1 : 0} />
+        <path d="M7 10h10M7 14h8" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M16 8l3 3-3 3" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    key: '/search',
+    label: '搜索',
+    icon: (active: boolean, color: string) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <circle cx="11" cy="11" r="7.5" stroke={color} strokeWidth="1.6" />
+        <path d="M16.5 16.5l5 5" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     ),
   },

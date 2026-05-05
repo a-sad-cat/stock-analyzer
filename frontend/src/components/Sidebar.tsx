@@ -2,9 +2,9 @@ import React from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Typography } from 'antd'
 import {
-  DashboardOutlined, FundOutlined, AuditOutlined, StockOutlined,
-  SearchOutlined, FireOutlined, BarChartOutlined, RobotOutlined,
-  DeleteOutlined,
+  DashboardOutlined, FundOutlined, SearchOutlined,
+  BarChartOutlined, RobotOutlined, FireOutlined,
+  DeleteOutlined, StockOutlined,
 } from '@ant-design/icons'
 
 const { Text } = Typography
@@ -15,12 +15,11 @@ interface SidebarProps {
 
 const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
-  { key: '/search', icon: <SearchOutlined />, label: '股票搜索' },
-  { key: '/sectors', icon: <FireOutlined />, label: '板块热度' },
-  { key: '/strategies', icon: <AuditOutlined />, label: '策略简介' },
-  { key: '/results', icon: <FundOutlined />, label: '策略选股' },
-  { key: '/backtest', icon: <BarChartOutlined />, label: '策略回测' },
+  { key: '/results', icon: <FundOutlined />, label: '扫描结果' },
   { key: '/llm', icon: <RobotOutlined />, label: 'AI 分析' },
+  { key: '/backtest', icon: <BarChartOutlined />, label: '策略回测' },
+  { key: '/search', icon: <SearchOutlined />, label: '搜索' },
+  { key: '/sectors', icon: <FireOutlined />, label: '板块热度' },
   { key: '/admin', icon: <DeleteOutlined />, label: '清除缓存' },
 ]
 
@@ -28,9 +27,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const selectedKey = location.pathname.startsWith('/stock/')
-    ? '/results'
-    : location.pathname
+  const selectedKey = (() => {
+    if (location.pathname.startsWith('/stock/')) return '/results'
+    if (location.pathname.startsWith('/sector/')) return '/sectors'
+    return location.pathname
+  })()
 
   const handleClick = (key: string) => {
     navigate(key)
