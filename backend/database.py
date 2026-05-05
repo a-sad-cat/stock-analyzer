@@ -6,6 +6,7 @@
 """
 
 import time
+import threading
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -13,8 +14,31 @@ from sqlalchemy.orm import sessionmaker
 from config import DATABASE_URL
 
 # ---------- SQLite 锁重试工具 ----------
-SQLITE_RETRY_COUNT = 5
-SQLITE_RETRY_BASE_DELAY = 0.1
+SQLITE_RETRY_COUNT = 10
+SQLITE_RETRY_BASE_DELAY = 0.05
+
+# 全局 DB 写锁: 多线程并发写 SQLite 时串行化，从根源避免 database is locked
+_db_write_lock = threading.Lock()
+
+
+def with_db_write_lock(fn, *args, **kwargs):
+    """获取全局写锁后执行，自动重试锁冲突"""
+    from sqlalchemy.exc import OperationalError
+    last_err = None
+    for attempt in range(SQLITE_RETRY_COUNT):
+        if not _db_write_lock.acquire(timeout=5.0):
+            time.sleep(SQLITE_RETRY_BASE_DELAY * (2 ** attempt))
+            continue
+        try:
+            return fn(*args, **kwargs)
+        except OperationalError as e:
+            if "database is locked" not in str(e).lower():
+                raise
+            last_err = e
+            time.sleep(SQLITE_RETRY_BASE_DELAY * (2 ** attempt))
+        finally:
+            _db_write_lock.release()
+    raise last_err if last_err else RuntimeError("db write lock timeout")
 
 
 def with_sqlite_retry(fn, *args, **kwargs):

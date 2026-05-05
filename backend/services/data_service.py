@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from models.stock import Stock, StockDaily
-from database import SessionLocal, with_sqlite_retry
+from database import SessionLocal, with_sqlite_retry, with_db_write_lock
 
 logger = logging.getLogger(__name__)
 
@@ -90,22 +90,37 @@ def _save_daily_data(db: Session, code: str, df: pd.DataFrame):
     if df is None or df.empty:
         return
     has_indicators = any(c in df.columns for c in INDICATOR_MAP)
+    dates = [d for d in df['date']]
+
+    # 批量查询已有记录（1 次 DB 查询代替 N 次）
+    existing_map = {}
+    try:
+        existing_rows = db.query(StockDaily).filter(
+            StockDaily.code == code,
+            StockDaily.date.in_(dates)
+        ).all()
+        for row in existing_rows:
+            existing_map[row.date] = row
+    except Exception:
+        existing_map = {}
+
+    # 收集待插入
+    to_insert = []
+
     for _, row in df.iterrows():
+        row_date = row['date']
         try:
-            existing = db.query(StockDaily).filter(
-                StockDaily.code == code,
-                StockDaily.date == row['date']
-            ).first()
-            if existing:
-                if has_indicators and existing.ma5 is None:
+            exist = existing_map.get(row_date)
+            if exist:
+                if has_indicators and not exist.ma5:
                     for df_col, db_col in INDICATOR_MAP.items():
-                        if df_col in df.columns and pd.notna(row.get(df_col)):
-                            setattr(existing, db_col, round(float(row[df_col]), 4))
-                    db.add(existing)
+                        val = row.get(df_col)
+                        if pd.notna(val):
+                            setattr(exist, db_col, round(float(val), 4))
                 continue
+
             daily = StockDaily(
-                code=code,
-                date=row['date'],
+                code=code, date=row_date,
                 open=float(row['open']) if pd.notna(row['open']) else None,
                 high=float(row['high']) if pd.notna(row['high']) else None,
                 low=float(row['low']) if pd.notna(row['low']) else None,
@@ -116,12 +131,22 @@ def _save_daily_data(db: Session, code: str, df: pd.DataFrame):
             )
             if has_indicators:
                 for df_col, db_col in INDICATOR_MAP.items():
-                    if df_col in df.columns and pd.notna(row.get(df_col)):
-                        setattr(daily, db_col, round(float(row[df_col]), 4))
-            db.add(daily)
+                    val = row.get(df_col)
+                    if pd.notna(val):
+                        setattr(daily, db_col, round(float(val), 4))
+            to_insert.append(daily)
         except Exception as e:
-            logger.warning(f"保存日K数据出错 ({code}, {row.get('date')}): {e}")
-    db.commit()
+            logger.warning(f"保存日K数据出错 ({code}, {row_date}): {e}")
+
+    if to_insert:
+        try:
+            db.bulk_save_objects(to_insert)
+        except Exception:
+            for obj in to_insert:
+                try:
+                    db.add(obj)
+                except Exception:
+                    pass
 
 
 # ---------- 公开接口 ----------
@@ -288,8 +313,10 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
                 if 'MA5' in data:
                     return df_result
                 df_result = _add_technical_indicators(df_result)
-                _save_daily_data(db, code, df_result.reset_index())
-                with_sqlite_retry(db.commit)
+                def _save_batch2():
+                    _save_daily_data(db, code, df_result.reset_index())
+                    db.commit()
+                with_db_write_lock(_save_batch2)
                 return df_result
 
         import akshare as ak
@@ -303,7 +330,7 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
 
         logger.debug(f"从 AKShare 获取 {code} 的日K数据...")
         _log_fetch(code)
-        time.sleep(0.3)
+        time.sleep(0.05)  # AKShare 反爬间隔（原 0.3s，8 workers 下可大幅降低）
 
         # 检查数据库中存储的市场信息
         try:
@@ -356,9 +383,11 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
             df['pct_chg'] = df['close'].pct_change() * 100
         df = df.drop_duplicates(subset=['date'])
 
-        # 保存到数据库
-        _save_daily_data(db, code, df)
-        with_sqlite_retry(db.commit)
+        # 保存到数据库（全局写锁避多线程冲突）
+        def _save_batch():
+            _save_daily_data(db, code, df)
+            db.commit()
+        with_db_write_lock(_save_batch)
 
         # 从数据库重新读取
         records = db.query(StockDaily).filter(
@@ -384,8 +413,10 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
         if df_result.index.duplicated().any():
             df_result = df_result[~df_result.index.duplicated(keep='first')]
         df_result = _add_technical_indicators(df_result)
-        _save_daily_data(db, code, df_result.reset_index())
-        with_sqlite_retry(db.commit)
+        def _save_batch3():
+            _save_daily_data(db, code, df_result.reset_index())
+            db.commit()
+        with_db_write_lock(_save_batch3)
         return df_result
 
     finally:

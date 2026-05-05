@@ -35,7 +35,7 @@ CACHE_EXPIRE_HOURS = 48
 # 默认扫描全部（0=全部），由定时任务在后台逐步缓存
 # 首次全量扫描较慢，后续增量更新
 MAX_SCAN_STOCKS = 0
-SCAN_WORKERS = 8
+SCAN_WORKERS = 12
 
 # ========================================
 # LLM AI 分析配置（默认：DeepSeek，国内直连 + 免费额度）

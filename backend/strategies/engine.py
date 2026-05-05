@@ -20,7 +20,7 @@ from .base import BaseStrategy
 from .builtin import get_builtin_strategies
 from models.strategy import Strategy, StrategyResult
 from services.data_service import get_all_stocks, get_daily_data
-from database import SessionLocal, with_sqlite_retry
+from database import SessionLocal, with_sqlite_retry, with_db_write_lock
 
 logger = logging.getLogger(__name__)
 
@@ -408,7 +408,7 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 0, top_k: int
         StrategyResult.strategy_id == strategy_id,
         StrategyResult.created_at >= datetime.now().strftime("%Y-%m-%d")
     ).delete()
-    with_sqlite_retry(db.commit)
+    with_db_write_lock(db.commit)
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from config import SCAN_WORKERS
@@ -449,9 +449,9 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 0, top_k: int
                 ))
                 results.append(r)
                 if len(results) % 50 == 0:
-                    with_sqlite_retry(db.commit)
+                    with_db_write_lock(db.commit)
 
-    with_sqlite_retry(db.commit)
+    with_db_write_lock(db.commit)
 
     strategy.last_run = datetime.now()
     db.commit()
@@ -480,6 +480,11 @@ def run_all_strategies(db: Session, stock_limit: int = 0, top_k: int = 50) -> di
         all_results = {}
 
         for strategy in strategies:
+            # 执行前再次检查启用状态（启动扫描期间用户可能已禁用）
+            db.refresh(strategy)
+            if not strategy.enabled:
+                logger.info(f"策略 [{strategy.name}] 已被禁用，跳过扫描")
+                continue
             try:
                 results = run_strategy(db, strategy.id, stock_limit, top_k)
                 all_results[strategy.id] = {
