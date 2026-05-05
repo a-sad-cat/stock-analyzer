@@ -1,22 +1,19 @@
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useEffect, useState, useRef } from 'react'
 import {
-  Typography, Space, Tag, Button, Spin, message, Switch, Tooltip, Popconfirm,
-  Empty, Modal, Form, Input, Select, Alert,
+  Typography, Space, Tag, Button, Spin, message, Popconfirm,
+  Modal, Form, Input, Select, Alert,
 } from 'antd'
 import {
-  PlayCircleOutlined, PlusOutlined, DeleteOutlined, SyncOutlined,
-  CheckCircleOutlined, StopOutlined, AppstoreAddOutlined, SettingOutlined,
-  ThunderboltOutlined,
+  PlusOutlined, DeleteOutlined, SyncOutlined,
+  CheckCircleOutlined, AppstoreAddOutlined, SettingOutlined,
+  ThunderboltOutlined, ClockCircleOutlined,
 } from '@ant-design/icons'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  getStrategies, runStrategy, deleteStrategy, createStrategy,
+  getStrategies, deleteStrategy, createStrategy,
   toggleStrategy, getAvailableBuiltin, addBuiltinStrategy,
   getAllBuiltinStrategies, batchManageBuiltin, reorderStrategies,
 } from '../api'
-import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
-import StockListItem from '../components/StockListItem'
 import SkeletonCard from '../components/SkeletonCard'
 import EmptyState from '../components/EmptyState'
 
@@ -29,17 +26,10 @@ const tagColors: Record<string, string> = {
   '左侧交易': 'magenta', '灵敏抄底': 'green', '强势股': 'red', '主升浪': 'blue',
 }
 
-const RESULT_PAGE_SIZE = 20
-
 const Strategies: React.FC = () => {
-  const navigate = useNavigate()
   const [strategies, setStrategies] = useState<any[]>([])
   const [selected, setSelected] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [running, setRunning] = useState<number | null>(null)
-  const [runResults, setRunResults] = useState<any[] | null>(null)
-  const [showHighScore, setShowHighScore] = useState(true)
-  const [displayCount, setDisplayCount] = useState(RESULT_PAGE_SIZE)
   const [createOpen, setCreateOpen] = useState(false)
   const [addBuiltinOpen, setAddBuiltinOpen] = useState(false)
   const [availableBuiltin, setAvailableBuiltin] = useState<any[]>([])
@@ -58,23 +48,12 @@ const Strategies: React.FC = () => {
     try { const res = await getStrategies(true); setStrategies(res.strategies || []) } catch {} finally { setLoading(false) }
   }
 
-  const handleRun = async (id: number) => {
-    setRunning(id)
-    setRunResults(null)
-    setDisplayCount(RESULT_PAGE_SIZE)
-    try {
-      const res = await runStrategy(id)
-      message.success(`扫描完成！匹配 ${res.count} 只`)
-      setRunResults(res.results || [])
-    } catch { message.error('扫描失败') } finally { setRunning(null) }
-  }
-
   const handleToggle = async (id: number) => {
     try { await toggleStrategy(id); message.success('操作成功'); loadStrategies() } catch { message.error('操作失败') }
   }
 
   const handleDelete = async (id: number) => {
-    try { await deleteStrategy(id); message.success('已移除'); loadStrategies(); if (selected?.id === id) setSelected(null); setRunResults(null) } catch { message.error('删除失败') }
+    try { await deleteStrategy(id); message.success('已移除'); loadStrategies(); if (selected?.id === id) setSelected(null) } catch { message.error('删除失败') }
   }
 
   const handleCreate = async (values: any) => {
@@ -125,23 +104,6 @@ const Strategies: React.FC = () => {
     } catch { message.error('排序失败') }
   }
 
-  // Infinite scroll for run results
-  const filteredResults = useMemo(() => {
-    if (!runResults) return []
-    return showHighScore ? runResults.filter((r: any) => r.score >= 80) : runResults
-  }, [runResults, showHighScore])
-
-  useEffect(() => { setDisplayCount(RESULT_PAGE_SIZE) }, [filteredResults.length])
-
-  const hasMore = displayCount < filteredResults.length
-  const loadMore = useCallback(() => {
-    setDisplayCount(c => Math.min(c + RESULT_PAGE_SIZE, filteredResults.length))
-  }, [filteredResults.length])
-
-  const { sentinelRef } = useInfiniteScroll({ hasMore, loading: false, onLoadMore: loadMore })
-
-  const paged = useMemo(() => filteredResults.slice(0, displayCount), [filteredResults, displayCount])
-
   const enabledCount = strategies.filter((s: any) => s.enabled).length
 
   if (loading) return <div style={{ padding: '4px 0' }}><SkeletonCard count={3} /></div>
@@ -151,7 +113,7 @@ const Strategies: React.FC = () => {
       {/* Header */}
       <div style={{ marginBottom: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <Text strong style={{ fontSize: 18 }}>策略管理</Text>
+          <Text strong style={{ fontSize: 18 }}>策略简介</Text>
           <Space size={4}>
             <Button size="small" icon={<SettingOutlined />} onClick={() => { setBatchOpen(true); loadAllBuiltin() }}>批量</Button>
             <Button size="small" icon={<AppstoreAddOutlined />} onClick={openAddBuiltin}>添加</Button>
@@ -159,10 +121,20 @@ const Strategies: React.FC = () => {
             <Button size="small" onClick={loadStrategies} icon={<SyncOutlined />} />
           </Space>
         </div>
-        <Space size={4}>
-          <Text style={{ fontSize: 12, color: '#8e99a4' }}>共 {strategies.length} 个</Text>
-          <Text style={{ fontSize: 12, color: '#52c41a' }}><CheckCircleOutlined /> {enabledCount} 启用</Text>
-        </Space>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Space size={4}>
+            <Text style={{ fontSize: 12, color: '#8e99a4' }}>共 {strategies.length} 个</Text>
+            <Text style={{ fontSize: 12, color: '#52c41a' }}><CheckCircleOutlined /> {enabledCount} 启用</Text>
+          </Space>
+          <Alert
+            type="info"
+            showIcon
+            icon={<ClockCircleOutlined />}
+            message="系统每天 0:00 / 17:00 自动扫描全市场，无需手动运行。结果请前往「扫描结果」查看。"
+            style={{ fontSize: 12, borderRadius: 10, marginTop: 4 }}
+            banner
+          />
+        </div>
       </div>
 
       {/* Strategy list */}
@@ -175,7 +147,7 @@ const Strategies: React.FC = () => {
               <div
                 key={item.id}
                 draggable
-                onClick={() => { setSelected(item); setRunResults(null) }}
+                onClick={() => { setSelected(item) }}
                 onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; dragRef.current = item.id }}
                 onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
                 onDrop={(e) => { e.preventDefault(); handleDragDrop(item.id) }}
@@ -231,29 +203,24 @@ const Strategies: React.FC = () => {
                     <Tag color={selected.enabled ? 'success' : 'default'} style={{ fontSize: 10 }}>{selected.enabled ? '已启用' : '已禁用'}</Tag>
                   </div>
                 </div>
-                <Space direction="vertical" size={4}>
-                  {selected.enabled ? (
-                    <Button type="primary" size="small" icon={<PlayCircleOutlined />} loading={running === selected.id} onClick={() => handleRun(selected.id)} block>
-                      {running === selected.id ? '扫描中' : '运行'}
-                    </Button>
-                  ) : (
-                    <Tooltip title="需先启用"><Button type="primary" size="small" disabled block>运行</Button></Tooltip>
-                  )}
-                  <Space size={4}>
-                    <Popconfirm title={selected.enabled ? '禁用？' : '启用？'} onConfirm={() => handleToggle(selected.id)}>
-                      <Button size="small">{selected.enabled ? '禁用' : '启用'}</Button>
-                    </Popconfirm>
-                    <Popconfirm title="确认移除？" onConfirm={() => handleDelete(selected.id)}>
-                      <Button size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Space>
+                <Space size={4}>
+                  <Popconfirm title={selected.enabled ? '禁用？' : '启用？'} onConfirm={() => handleToggle(selected.id)}>
+                    <Button size="small">{selected.enabled ? '禁用' : '启用'}</Button>
+                  </Popconfirm>
+                  <Popconfirm title="确认移除？" onConfirm={() => handleDelete(selected.id)}>
+                    <Button size="small" danger icon={<DeleteOutlined />} />
+                  </Popconfirm>
                 </Space>
               </div>
 
               {/* Description */}
-              {selected.description && (
-                <Text style={{ fontSize: 13, color: '#8e99a4', display: 'block', marginBottom: 8 }}>
+              {selected.description ? (
+                <Text style={{ fontSize: 13, color: '#333', display: 'block', marginBottom: 8, lineHeight: 1.6 }}>
                   {selected.description}
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 13, color: '#8e99a4', display: 'block', marginBottom: 8 }}>
+                  暂无描述
                 </Text>
               )}
 
@@ -268,48 +235,16 @@ const Strategies: React.FC = () => {
 
               {/* Last run info */}
               <div style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 12, color: '#8e99a4' }}>上次运行：{selected.last_run || '从未运行'}</Text>
+                <Text style={{ fontSize: 12, color: '#8e99a4' }}>上次扫描：{selected.last_run || '从未运行'}</Text>
               </div>
 
               <Alert
-                type="info"
+                type={selected.enabled ? 'success' : 'warning'}
                 showIcon
-                message={selected.enabled ? '该策略已启用，运行/快速扫描均会使用' : '该策略已禁用，扫描时将跳过'}
+                message={selected.enabled ? '该策略已启用，每日定时扫描会使用此策略选股' : '该策略已禁用，定时扫描时将跳过此策略'}
                 style={{ fontSize: 12, borderRadius: 10 }}
               />
             </div>
-
-            {/* Run results */}
-            {runResults && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <Space>
-                    <Text strong style={{ fontSize: 14 }}>扫描结果</Text>
-                    <Tag color="blue">{runResults.length} 只匹配</Tag>
-                  </Space>
-                  <Switch checked={showHighScore} onChange={(v) => { setShowHighScore(v); setDisplayCount(RESULT_PAGE_SIZE) }} checkedChildren="高分" unCheckedChildren="全部" size="small" />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {paged.map((r: any, i: number) => (
-                    <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.03, 0.3) }}>
-                      <StockListItem
-                        code={r.stock_code}
-                        name={r.stock_name}
-                        score={r.score}
-                        reason={r.reason}
-                        onClick={() => navigate(`/stock/${r.stock_code}`)}
-                      />
-                    </motion.div>
-                  ))}
-                </div>
-
-                {hasMore && (
-                  <div ref={sentinelRef} style={{ textAlign: 'center', padding: '16px 0' }}>
-                    <Spin size="small" />
-                  </div>
-                )}
-              </div>
-            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -317,11 +252,11 @@ const Strategies: React.FC = () => {
       {!selected && !loading && strategies.length > 0 && (
         <div className="card-mobile" style={{ padding: 32, textAlign: 'center', borderRadius: 16 }}>
           <ThunderboltOutlined style={{ fontSize: 36, color: '#d9d9d9', marginBottom: 8 }} />
-          <div style={{ color: '#8e99a4', fontSize: 13 }}>点击上方策略查看详情和运行</div>
+          <div style={{ color: '#8e99a4', fontSize: 13 }}>点击上方策略查看详情</div>
         </div>
       )}
 
-      {/* Create modal */}
+      {/* Create modal (unchanged) */}
       <Modal title="新建策略" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={() => form.submit()} width="90%">
         <Form form={form} layout="vertical" onFinish={handleCreate}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
@@ -355,7 +290,7 @@ const Strategies: React.FC = () => {
         </Form>
       </Modal>
 
-      {/* Add builtin modal */}
+      {/* Add builtin modal (unchanged) */}
       <Modal title="添加内置策略" open={addBuiltinOpen} onCancel={() => setAddBuiltinOpen(false)} footer={null} width="90%">
         {loadingBuiltin ? <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
           : availableBuiltin.length === 0 ? (
@@ -383,7 +318,7 @@ const Strategies: React.FC = () => {
           )}
       </Modal>
 
-      {/* Batch modal */}
+      {/* Batch modal (unchanged) */}
       <Modal title="批量管理" open={batchOpen} onCancel={() => setBatchOpen(false)} onOk={handleBatch} okText="确认" width="90%">
         <Space style={{ marginBottom: 12 }}>
           <Select value={batchAction} onChange={setBatchAction} style={{ width: 120 }} options={[

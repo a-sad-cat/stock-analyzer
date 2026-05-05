@@ -4,6 +4,7 @@ import { Typography } from 'antd'
 import {
   DashboardOutlined, FundOutlined, AuditOutlined, StockOutlined,
   SearchOutlined, FireOutlined, BarChartOutlined, RobotOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons'
 
 const { Text } = Typography
@@ -16,10 +17,11 @@ const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: '仪表盘' },
   { key: '/search', icon: <SearchOutlined />, label: '股票搜索' },
   { key: '/sectors', icon: <FireOutlined />, label: '板块热度' },
-  { key: '/strategies', icon: <AuditOutlined />, label: '策略管理' },
-  { key: '/results', icon: <FundOutlined />, label: '扫描结果' },
+  { key: '/strategies', icon: <AuditOutlined />, label: '策略简介' },
+  { key: '/results', icon: <FundOutlined />, label: '策略选股' },
   { key: '/backtest', icon: <BarChartOutlined />, label: '策略回测' },
   { key: '/llm', icon: <RobotOutlined />, label: 'AI 分析' },
+  { key: '/admin', icon: <DeleteOutlined />, label: '清除缓存' },
 ]
 
 const Sidebar: React.FC<SidebarProps> = ({ onNavigate }) => {

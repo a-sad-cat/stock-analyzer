@@ -485,6 +485,9 @@ def run_all_strategies(db: Session, stock_limit: int = 0, top_k: int = 50) -> di
                 "error": str(e),
             }
 
+    from services.data_service import _flush_fetch_log
+
+    _flush_fetch_log()
     return all_results
 
 

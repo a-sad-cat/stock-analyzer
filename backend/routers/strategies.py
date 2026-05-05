@@ -187,17 +187,8 @@ def api_run_strategy(
     top_k: int = Query(50, ge=1, le=200, description="返回评分最高的前N条"),
     db: Session = Depends(get_db)
 ):
-    """运行单个策略，全市场扫描后返回评分最高的 top_k 条"""
-    try:
-        results = run_strategy(db, strategy_id, stock_limit=limit, top_k=top_k)
-        return {
-            "strategy_id": strategy_id,
-            "count": len(results),
-            "results": results,
-        }
-    except Exception as e:
-        logger.error(f"运行策略失败 [{strategy_id}]: {e}")
-        raise HTTPException(status_code=500, detail=f"运行策略失败: {str(e)}")
+    """运行单个策略（已禁用——每日 0:00 / 17:00 定时自动扫描，无需手动触发）"""
+    raise HTTPException(status_code=410, detail="手动扫描已关闭，系统每天 0:00 和 17:00 自动运行全部策略扫描，请前往「扫描结果」页面查看")
 
 
 @router.post("/run-all")
@@ -206,14 +197,5 @@ def api_run_all_strategies(
     top_k: int = Query(50, ge=1, le=200, description="每个策略返回评分最高的前N条"),
     db: Session = Depends(get_db)
 ):
-    """运行所有启用的策略，每个策略返回评分最高的 top_k 条"""
-    try:
-        all_results = run_all_strategies(db, stock_limit=limit, top_k=top_k)
-        total = sum(v.get("count", 0) for v in all_results.values())
-        return {
-            "total_matched": total,
-            "strategies": all_results,
-        }
-    except Exception as e:
-        logger.error(f"运行全部策略失败: {e}")
-        raise HTTPException(status_code=500, detail=f"运行策略失败: {str(e)}")
+    """运行所有启用的策略（已禁用——每日 0:00 / 17:00 定时自动扫描，无需手动触发）"""
+    raise HTTPException(status_code=410, detail="手动扫描已关闭，系统每天 0:00 和 17:00 自动运行全部策略扫描，请前往「扫描结果」页面查看")

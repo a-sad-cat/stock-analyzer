@@ -9,6 +9,7 @@ import Sectors from '../views/Sectors'
 import SectorDetail from '../views/SectorDetail'
 import Backtest from '../views/Backtest'
 import AIAnalysis from '../views/AIAnalysis'
+import Admin from '../views/Admin'
 
 const AppRouter: React.FC = () => {
   return (
@@ -21,6 +22,7 @@ const AppRouter: React.FC = () => {
       <Route path="/sector/:name" element={<SectorDetail />} />
       <Route path="/backtest" element={<Backtest />} />
       <Route path="/llm" element={<AIAnalysis />} />
+      <Route path="/admin" element={<Admin />} />
       <Route path="/stock/:code" element={<StockDetail />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

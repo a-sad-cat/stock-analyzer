@@ -7,6 +7,7 @@
 
 import time
 import logging
+import threading
 from datetime import datetime, timedelta, date
 from typing import Optional
 
@@ -18,6 +19,37 @@ from models.stock import Stock, StockDaily
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
+
+# 批量日志：收集 AKShare 请求的股票代码，每 500 条打印一次
+_fetch_log_lock = threading.Lock()
+_fetch_log_codes: list[str] = []
+FETCH_LOG_BATCH = 500
+
+
+def _log_fetch(code: str):
+    """线程安全地记录 AKShare 请求，每 500 条批量打印一次"""
+    global _fetch_log_codes
+    with _fetch_log_lock:
+        _fetch_log_codes.append(code)
+        if len(_fetch_log_codes) >= FETCH_LOG_BATCH:
+            sample = _fetch_log_codes[:5]
+            logger.info(
+                f"从 AKShare 获取 [本批{len(_fetch_log_codes)}只] 日K数据: "
+                f"{', '.join(sample)}... 等"
+            )
+            _fetch_log_codes = []
+
+
+def _flush_fetch_log():
+    """打印剩余未刷新的 AKShare 请求统计"""
+    global _fetch_log_codes
+    with _fetch_log_lock:
+        if _fetch_log_codes:
+            logger.info(
+                f"从 AKShare 获取 [本轮共{len(_fetch_log_codes)}只] 日K数据"
+            )
+            _fetch_log_codes = []
+
 
 # 进程生命周期内仅执行一次的市场修复标志
 _repair_done = False
@@ -268,7 +300,8 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
                 bare_code = bare_code[len(prefix):]
                 break
 
-        logger.info(f"从 AKShare 获取 {code} 的日K数据...")
+        logger.debug(f"从 AKShare 获取 {code} 的日K数据...")
+        _log_fetch(code)
         time.sleep(0.3)
 
         # 检查数据库中存储的市场信息

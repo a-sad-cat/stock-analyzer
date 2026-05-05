@@ -61,8 +61,8 @@ LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "2048"))
 LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "2"))
 
 # 定时任务配置（每天自动刷新数据的时间）
-# 开盘前、盘中休息、收盘后各刷新一次
-SCHEDULE_TIMES = ["10:00", "11:40", "15:10"]
+# 0:00 凌晨空闲时段 + 17:00 收盘后，避免与用户操作争抢 CPU
+SCHEDULE_TIMES = ["00:00", "17:00"]
 
 # 每个策略返回最符合的前 K 条结果
 TOP_K_RESULTS = 50

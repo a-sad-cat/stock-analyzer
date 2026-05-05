@@ -1,8 +1,11 @@
 """
 定时任务模块
-每天 10:00 / 11:40 / 15:10 自动预取数据 + 全市场扫描
+每天 00:00 / 17:00 自动全市场扫描
+如果今日已有扫描数据则跳过（服务重启不会重复扫描）
 """
 import logging
+from datetime import date
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -46,17 +49,29 @@ def prefetch_all_stock_data():
 
 
 def run_scheduled_scan():
-    """定时全市场扫描：运行所有策略（数据由 get_daily_data 按需拉取+DB缓存）"""
+    """定时全市场扫描：运行所有策略。
+    如果今日已有扫描结果则跳过（避免服务重启后重复扫描）。
+    """
     from database import SessionLocal
     from strategies.engine import run_all_strategies
-    from config import TOP_K_RESULTS
-
-    logger.info("=" * 50)
-    logger.info("定时任务：开始全市场策略扫描")
-    logger.info("=" * 50)
+    from models.strategy import StrategyResult
 
     db = SessionLocal()
     try:
+        today = date.today().isoformat()
+        existing = db.query(StrategyResult).filter(
+            StrategyResult.created_at >= f"{today} 00:00:00",
+            StrategyResult.created_at <= f"{today} 23:59:59",
+        ).first()
+
+        if existing:
+            logger.info(f"定时任务：今日 {today} 已有扫描数据，跳过")
+            return
+
+        logger.info("=" * 50)
+        logger.info("定时任务：今日无扫描数据，开始全市场策略扫描")
+        logger.info("=" * 50)
+
         results = run_all_strategies(db, stock_limit=0)
         total = sum(v.get("count", 0) for v in results.values())
         logger.info(f"定时任务：全市场扫描完成，共匹配 {total} 条")
@@ -64,8 +79,7 @@ def run_scheduled_scan():
         logger.error(f"定时任务：全市场扫描失败: {e}")
     finally:
         db.close()
-
-    logger.info("定时任务：本轮执行完毕")
+        logger.info("定时任务：本轮执行完毕")
 
 
 def init_scheduler():

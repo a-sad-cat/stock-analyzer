@@ -31,7 +31,7 @@ try:
 except Exception:
     pass
 
-from routers import stocks, strategies, sectors, backtest, llm_analysis
+from routers import stocks, strategies, sectors, backtest, llm_analysis, admin
 from database import engine, Base
 from services.data_service import _get_spot_map
 from services.sector_service import refresh_sectors, rebuild_sector_map, build_stock_sectors_map
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 logger.info("=" * 50)
 logger.info("stock-analyzer 后端启动中...")
 logger.info("AKShare 后台预热可能需要 30-60 秒")
-logger.info("定时任务: 每天 10:00 / 11:40 / 15:10 自动刷新全市场数据")
+logger.info("定时任务: 每天 00:00 / 17:00 自动刷新全市场（如果今日已有数据则跳过）")
 logger.info("数据策略: 用户 API 优先读 DB 缓存，无缓存时按需拉取单只股票")
 logger.info("=" * 50)
 
@@ -84,6 +84,7 @@ app.include_router(strategies.router, prefix="/api/strategies", tags=["策略管
 app.include_router(sectors.router, prefix="/api/sectors", tags=["板块热度"])
 app.include_router(backtest.router, prefix="/api/backtest", tags=["策略回测"])
 app.include_router(llm_analysis.router, prefix="/api/llm", tags=["LLM AI分析"])
+app.include_router(admin.router, prefix="/api/admin", tags=["后台管理"])
 
 
 def _warm_cache():
@@ -119,8 +120,44 @@ threading.Thread(target=_warm_sectors, daemon=True).start()
 threading.Thread(target=_warm_sector_map, daemon=True).start()
 threading.Thread(target=build_stock_sectors_map, daemon=True).start()
 
-# 注：启动时不再自动预取全市场股票数据，改为由定时任务（10:00/11:40/15:10）统一刷新。
-# 用户 API 访问时若 DB 无缓存，会按需拉取单只股票并缓存到 SQLite。
+def _ensure_today_scan():
+    """启动时检查：如果今日尚无任何策略扫描结果，则触发一次全市场扫描"""
+    import time
+    from datetime import date
+    from database import SessionLocal
+    from models.strategy import StrategyResult
+    from strategies.engine import run_all_strategies
+
+    time.sleep(5)  # 等预热线程跑起来
+    db = SessionLocal()
+    try:
+        today = date.today().isoformat()
+        existing = db.query(StrategyResult).filter(
+            StrategyResult.created_at >= f"{today} 00:00:00",
+            StrategyResult.created_at <= f"{today} 23:59:59",
+        ).first()
+
+        if existing:
+            logger.info(f"启动检查：今日 {today} 已有扫描数据，无需补扫")
+            return
+
+        logger.info("=" * 50)
+        logger.info(f"启动检查：今日 {today} 无扫描数据，触发全市场扫描")
+        logger.info("=" * 50)
+
+        results = run_all_strategies(db, stock_limit=0)
+        total = sum(v.get("count", 0) for v in results.values())
+        logger.info(f"启动检查：全市场扫描完成，共匹配 {total} 条")
+    except Exception as e:
+        logger.error(f"启动检查：全市场扫描失败: {e}")
+    finally:
+        db.close()
+
+
+# 注：启动后检查今日是否有扫描结果，无则后台补扫一次。
+# 此后每天由定时任务（00:00 / 17:00）自动扫描，已有数据则跳过。
+
+threading.Thread(target=_ensure_today_scan, daemon=True).start()
 
 # --- 初始化定时任务 ---
 try:

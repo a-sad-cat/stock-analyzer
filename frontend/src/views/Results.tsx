@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Typography, Select, DatePicker, Input, Spin, message } from 'antd'
-import { SearchOutlined, ReloadOutlined, DownloadOutlined, ThunderboltOutlined, FilterOutlined } from '@ant-design/icons'
+import { SearchOutlined, ReloadOutlined, DownloadOutlined, FilterOutlined } from '@ant-design/icons'
 import { motion } from 'framer-motion'
 import dayjs from 'dayjs'
-import { getResults, getStrategies, runAllStrategies, getStocksSectorsBatch } from '../api'
+import { getResults, getStrategies, getStocksSectorsBatch } from '../api'
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll'
 import StockListItem from '../components/StockListItem'
 import SkeletonCard from '../components/SkeletonCard'
@@ -12,6 +12,22 @@ import EmptyState from '../components/EmptyState'
 
 const { Text } = Typography
 const PAGE_SIZE = 20
+
+const MARKET_SEGMENTS = [
+  { value: '', label: '全部市场' },
+  { value: 'main', label: '主板（沪+深）' },
+  { value: 'gem', label: '创业板' },
+  { value: 'star', label: '科创板' },
+]
+
+function getMarketSegment(code: string): string {
+  if (/^300|^301/.test(code)) return 'gem'
+  if (/^688/.test(code)) return 'star'
+  // 沪市主板: 6开头但不是688; 深市主板: 00开头
+  if (/^6/.test(code)) return 'main'
+  if (/^00/.test(code)) return 'main'
+  return 'other'
+}
 
 const Results: React.FC = () => {
   const navigate = useNavigate()
@@ -27,6 +43,7 @@ const Results: React.FC = () => {
   const selectedDate = searchParams.get('date') || dayjs().format('YYYY-MM-DD')
   const minScore = Number(searchParams.get('minScore')) || 80
   const sectorFilter = searchParams.get('sector') || ''
+  const marketFilter = searchParams.get('market') || ''
   const searchKeyword = searchParams.get('q') || ''
 
   const setParam = (key: string, value: string | number | undefined) => {
@@ -74,15 +91,6 @@ const Results: React.FC = () => {
     }).catch(() => {})
   }, [results])
 
-  const handleRefresh = async () => {
-    message.loading({ content: '扫描中...', key: 'scan' })
-    try {
-      const res = await runAllStrategies()
-      message.success({ content: `完成！匹配 ${res.total_matched || 0} 只`, key: 'scan' })
-      loadData(true)
-    } catch { message.error({ content: '扫描失败', key: 'scan' }) }
-  }
-
   const groupedResults = useMemo(() => {
     const map = new Map<string, any[]>()
     for (const r of results) {
@@ -107,12 +115,13 @@ const Results: React.FC = () => {
     if (g.maxScore < minScore) return false
     if (selectedStrategy && !g.items.some((d: any) => d.strategy_id === selectedStrategy)) return false
     if (sectorFilter && !(sectorMap[g.stock_code] || []).includes(sectorFilter)) return false
+    if (marketFilter && getMarketSegment(g.stock_code) !== marketFilter) return false
     if (searchKeyword) {
       const kw = searchKeyword.toUpperCase()
       if (!g.stock_code.includes(kw) && !g.stock_name.includes(kw) && !g.strategies.some((s: string) => s.includes(kw))) return false
     }
     return true
-  }), [groupedResults, minScore, selectedStrategy, sectorFilter, sectorMap, searchKeyword])
+  }), [groupedResults, minScore, selectedStrategy, sectorFilter, marketFilter, sectorMap, searchKeyword])
 
   useEffect(() => { setDisplayCount(PAGE_SIZE) }, [filtered.length])
 
@@ -180,17 +189,6 @@ const Results: React.FC = () => {
         >
           <ReloadOutlined style={{ fontSize: 14 }} />
         </div>
-        <div
-          onClick={handleRefresh}
-          style={{
-            height: 32, borderRadius: 16, display: 'flex', alignItems: 'center',
-            padding: '0 10px', gap: 4, flexShrink: 0,
-            background: 'var(--color-primary)', color: '#fff', cursor: 'pointer',
-            fontSize: 12, fontWeight: 500,
-          }}
-        >
-          <ThunderboltOutlined style={{ fontSize: 12 }} />扫描
-        </div>
       </div>
 
       {/* Collapsible filters */}
@@ -241,6 +239,14 @@ const Results: React.FC = () => {
                 onChange={(v) => setParam('sector', v)}
                 style={{ flex: 1, minWidth: 100 }} variant="filled"
                 options={allSectors.map((s) => ({ value: s, label: s }))}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <Text style={{ fontSize: 11, color: '#8e99a4', flexShrink: 0, width: 28 }}>板块</Text>
+              <Select
+                size="small" value={marketFilter} onChange={(v) => setParam('market', v)}
+                style={{ flex: 1, minWidth: 100 }} variant="filled"
+                options={MARKET_SEGMENTS}
               />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -297,7 +303,7 @@ const Results: React.FC = () => {
           )}
         </div>
       ) : (
-        <EmptyState description="暂无扫描结果" actionText="去扫描" onAction={handleRefresh} />
+        <EmptyState description="暂无扫描结果" />
       )}
     </div>
   )
