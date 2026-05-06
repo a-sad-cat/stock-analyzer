@@ -222,12 +222,40 @@ def get_all_stocks(db: Session = None) -> list[dict]:
                 repair_stock_market(db)
             return [{"code": s.code, "name": s.name, "market": s.market, "industry": s.industry} for s in stocks]
 
-        # 本地没有，从 AKShare（新浪数据源）获取
+        # 本地没有，从 AKShare 多源降级获取
         import akshare as ak
-        logger.info("从 AKShare（新浪源）获取A股列表...")
-        df = ak.stock_zh_a_spot_em()
-        df = df[['代码', '名称']].rename(columns={'代码': 'code', '名称': 'name'})
-        df['industry'] = ''
+
+        df = None
+        for src_name, fetcher in [
+            ('东方财富', lambda: ak.stock_zh_a_spot_em()),
+            ('Sina', lambda: ak.stock_zh_a_spot()),
+        ]:
+            try:
+                logger.info(f"从 AKShare（{src_name}源）获取A股列表...")
+                df = fetcher()
+                if df is not None and not df.empty:
+                    break
+            except Exception as e:
+                logger.warning(f"AKShare [{src_name}] 股票列表获取失败: {str(e)[:80]}")
+                continue
+
+        if df is None or df.empty:
+            logger.error("所有数据源均无法获取股票列表，使用本地缓存")
+            stocks = db.query(Stock).all()
+            return [{"code": s.code, "name": s.name, "market": s.market, "industry": s.industry} for s in stocks]
+
+        # 统一列名
+        if '代码' in df.columns:
+            df = df[['代码', '名称']].rename(columns={'代码': 'code', '名称': 'name'})
+        elif 'code' in df.columns:
+            df = df[['code', 'name']]
+        else:
+            logger.error("股票列表返回格式异常，使用本地缓存")
+            stocks = db.query(Stock).all()
+            return [{"code": s.code, "name": s.name, "market": s.market, "industry": s.industry} for s in stocks]
+
+        if 'industry' not in df.columns:
+            df['industry'] = ''
 
         # 清理代码前缀 + 判断市场
         def _clean_code_and_market(raw):
@@ -267,6 +295,94 @@ def get_all_stocks(db: Session = None) -> list[dict]:
     finally:
         if close_db:
             db.close()
+
+
+# K线数据源轮转：每 ROTATE_INTERVAL 次调用切换到下一个数据源，分散负载防封 IP
+# 3源 × 7次轮转: 3655÷12workers÷(CALLS_PER_SOURCE=7) → 每源约 174 批次，间隔充裕
+_fetch_counter = 0
+_fetch_counter_lock = threading.Lock()
+ROTATE_INTERVAL = 7
+
+
+def _fetch_sina(symbol: str, start_date: str, end_date: str):
+    import akshare as ak
+    return ak.stock_zh_a_daily(symbol=symbol, start_date=start_date, end_date=end_date)
+
+
+def _fetch_eastmoney(symbol: str, start_date: str, end_date: str):
+    import akshare as ak
+    bare = symbol.replace('sh', '').replace('sz', '').replace('bj', '')
+    df = ak.stock_zh_a_hist(symbol=bare, period="daily",
+                            start_date=start_date, end_date=end_date, adjust="qfq")
+    if df is not None and not df.empty:
+        df = df.rename(columns={
+            '日期': 'date', '开盘': 'open', '最高': 'high',
+            '最低': 'low', '收盘': 'close', '成交量': 'volume',
+            '成交额': 'amount', '涨跌幅': 'pct_chg',
+        })
+    return df
+
+
+def _fetch_tencent(symbol: str, start_date: str, end_date: str):
+    import akshare as ak
+    df = ak.stock_zh_a_hist_tx(symbol=symbol, start_date=start_date, end_date=end_date)
+    if df is not None and not df.empty:
+        # 腾讯源无 volume / pct_chg 列，补 NaN
+        if 'volume' not in df.columns:
+            df['volume'] = float('nan')
+        if 'pct_chg' not in df.columns:
+            df['pct_chg'] = float('nan')
+    return df
+
+
+_KLINE_SOURCES = [
+    ('Sina',       _fetch_sina),
+    ('东方财富',   _fetch_eastmoney),
+    ('腾讯',       _fetch_tencent),
+]
+
+
+def _rotated_kline_sources():
+    """每 ROTATE_INTERVAL 次调用循环移位: 0-6→Sina先, 7-13→EM先, 14-20→TX先, ..."""
+    global _fetch_counter
+    with _fetch_counter_lock:
+        _fetch_counter += 1
+        shift = (_fetch_counter // ROTATE_INTERVAL) % len(_KLINE_SOURCES)
+    if shift == 0:
+        return _KLINE_SOURCES
+    return _KLINE_SOURCES[shift:] + _KLINE_SOURCES[:shift]
+
+
+def _akshare_fetch_with_retry(symbol: str, start_date: str, end_date: str, max_retries: int = 3):
+    """多数据源轮转 + 降级 + 重试：均匀分散到各源，单源失败自动切下一个"""
+    sources = _rotated_kline_sources()
+
+    for src_name, fetcher in sources:
+        last_err = None
+        for attempt in range(max_retries):
+            try:
+                df = fetcher(symbol, start_date, end_date)
+                if df is not None and not df.empty:
+                    if attempt > 0:
+                        logger.debug(f"AKShare [{src_name}] {symbol} 第{attempt+1}次重试成功")
+                    return df
+                break  # 空数据不重试
+            except Exception as e:
+                last_err = e
+                err_str = str(e).lower()
+                is_network = any(kw in err_str for kw in (
+                    'connection', 'timeout', 'remote', 'reset', 'aborted', 'refused'
+                ))
+                if not is_network or attempt >= max_retries - 1:
+                    break
+                delay = (2 ** attempt) * 1.5
+                time.sleep(delay)
+
+        err_msg = str(last_err)[:80] if last_err else "返回空数据"
+        logger.info(f"  {symbol} [{src_name}] 获取失败 ({err_msg})，切换数据源...")
+
+    logger.warning(f"  {symbol} 所有数据源均已失败")
+    raise last_err if last_err else RuntimeError("all sources exhausted")
 
 
 def _records_to_dataframe(db, code, records, start_dt, end_dt) -> pd.DataFrame:
@@ -324,9 +440,7 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
             ).order_by(StockDaily.date.asc()).all()
             return _records_to_dataframe(db, code, records, start_dt, end_dt)
 
-        import akshare as ak
-
-        # 清除代码中已有的 sh/sz/bj 前缀（AKShare 某些版本会带前缀）
+        # 清除代码中已有的 sh/sz/bj 前缀
         bare_code = code.lower()
         for prefix in ('sh', 'sz', 'bj'):
             if bare_code.startswith(prefix):
@@ -377,19 +491,16 @@ def get_daily_data(code: str, start_date: str = None, end_date: str = None) -> p
             market_prefix = 'bj'
 
         try:
-            df = ak.stock_zh_a_daily(symbol=f"{market_prefix}{bare_code}",
-                                     start_date=fetch_start, end_date=end_date)
+            df = _akshare_fetch_with_retry(
+                f"{market_prefix}{bare_code}", fetch_start, end_date)
         except Exception as e:
             logger.warning(f"获取 {code} 数据失败: {e}")
-
-            if market_prefix != 'sz':
-                try:
-                    df = ak.stock_zh_a_daily(symbol=f"sz{bare_code}",
-                                             start_date=fetch_start, end_date=end_date)
-                    logger.info(f"  → 降级到 sz 前缀成功")
-                except Exception:
-                    return pd.DataFrame()
-            else:
+            # 降级：尝试 sz 前缀
+            try:
+                df = _akshare_fetch_with_retry(
+                    f"sz{bare_code}", fetch_start, end_date)
+                logger.info(f"  → 降级到 sz 前缀成功")
+            except Exception:
                 return pd.DataFrame()
 
         if df is None or df.empty:

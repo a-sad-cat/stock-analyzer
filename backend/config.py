@@ -27,6 +27,10 @@ if "sslmode" not in DATABASE_URL and not DATABASE_URL.startswith("sqlite"):
 # AKShare 请求超时（秒）
 AKSHARE_TIMEOUT = 30
 
+# AKShare 代理配置（服务器无法直连 Sina 时使用）
+# 例: export AKSHARE_PROXY=http://127.0.0.1:7890
+AKSHARE_PROXY = os.environ.get("AKSHARE_PROXY", "")
+
 # 缓存配置
 # 数据缓存过期时间（小时）
 # 周末和节假日休市时，数据几天不变，设长避免反复拉取

@@ -6,33 +6,61 @@ logger = logging.getLogger(__name__)
 
 
 def get_index_data(days: int = 400) -> pd.DataFrame:
-    """获取上证指数历史数据用于市场环境判定"""
+    """获取上证指数历史数据用于市场环境判定（多源降级：Sina → 东方财富）"""
     import akshare as ak
-    try:
-        end = date.today()
-        start = end - timedelta(days=days)
-        df = ak.stock_zh_index_daily(symbol="sh000001")
-        if df is None or df.empty:
-            return pd.DataFrame()
-        df = df.rename(columns={
-            "date": "date", "open": "open", "high": "high",
-            "low": "low", "close": "close", "volume": "volume",
-        })
-        if "date" in df.columns:
-            df["date"] = pd.to_datetime(df["date"])
-            df = df.set_index("date")
-        elif df.index.dtype != "datetime64[ns]":
-            df.index = pd.to_datetime(df.index)
+    end = date.today()
+    start = end - timedelta(days=days)
 
-        # 过滤日期范围（AKShare 返回全量数据）
+    df = None
+    for src_name, fetcher in [
+        ('Sina', lambda: ak.stock_zh_index_daily(symbol="sh000001")),
+        ('东方财富', lambda: ak.stock_zh_index_daily_em(symbol="sh000001")),
+    ]:
         try:
-            df = df[df.index >= pd.Timestamp(start)]
-        except Exception:
-            df = df.tail(days)
-        return df
-    except Exception as e:
-        logger.warning(f"获取指数数据失败: {e}")
-    return pd.DataFrame()
+            df = fetcher()
+            if df is not None and not df.empty:
+                break
+        except Exception as e:
+            logger.warning(f"获取指数数据失败 [{src_name}]: {str(e)[:80]}")
+
+    if df is None or df.empty:
+        logger.warning("所有数据源均无法获取指数数据")
+        return pd.DataFrame()
+
+    # 统一列名（东方财富和 Sina 列名可能不同）
+    rename_map = {}
+    for col in ['date', '日期']:
+        if col in df.columns:
+            rename_map[col] = 'date'
+    for col in ['open', '开盘']:
+        if col in df.columns:
+            rename_map[col] = 'open'
+    for col in ['high', '最高']:
+        if col in df.columns:
+            rename_map[col] = 'high'
+    for col in ['low', '最低']:
+        if col in df.columns:
+            rename_map[col] = 'low'
+    for col in ['close', '收盘']:
+        if col in df.columns:
+            rename_map[col] = 'close'
+    for col in ['volume', '成交量']:
+        if col in df.columns:
+            rename_map[col] = 'volume'
+    df = df.rename(columns=rename_map)
+
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.set_index("date")
+    elif df.index.dtype != "datetime64[ns]":
+        df.index = pd.to_datetime(df.index)
+
+    # 过滤日期范围（AKShare 可能返回全量数据）
+    try:
+        df = df[df.index >= pd.Timestamp(start)]
+    except Exception:
+        df = df.tail(days)
+    return df
 
 
 def classify_market_regime(index_df: pd.DataFrame) -> dict:

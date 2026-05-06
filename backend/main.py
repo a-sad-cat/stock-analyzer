@@ -22,6 +22,14 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
+# --- 代理配置：AKShare 走代理访问 Sina ---
+from config import AKSHARE_PROXY
+if AKSHARE_PROXY:
+    os.environ["HTTP_PROXY"] = AKSHARE_PROXY
+    os.environ["HTTPS_PROXY"] = AKSHARE_PROXY
+    os.environ["NO_PROXY"] = "localhost,127.0.0.1"
+    logging.getLogger(__name__).info(f"AKShare 代理已设置: {AKSHARE_PROXY}")
+
 # 禁用 AKShare 的 tqdm 进度条
 os.environ["TQDM_DISABLE"] = "1"
 # 禁用 AKShare 控制台日志
