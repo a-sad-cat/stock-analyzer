@@ -710,11 +710,11 @@ def get_stock_detail(code: str) -> dict:
     for idx, row in recent.iterrows():
         item = {
             'date': str(idx),
-            'open': round(float(row['open']), 2),
-            'high': round(float(row['high']), 2),
-            'low': round(float(row['low']), 2),
-            'close': round(float(row['close']), 2),
-            'volume': float(row['volume']),
+            'open': round(float(row['open']), 2) if pd.notna(row.get('open')) else None,
+            'high': round(float(row['high']), 2) if pd.notna(row.get('high')) else None,
+            'low': round(float(row['low']), 2) if pd.notna(row.get('low')) else None,
+            'close': round(float(row['close']), 2) if pd.notna(row.get('close')) else None,
+            'volume': float(row['volume']) if pd.notna(row.get('volume')) else 0,
             'amount': float(row['amount']) if pd.notna(row.get('amount')) else 0,
             'pct_chg': round(float(row['pct_chg']), 2) if pd.notna(row.get('pct_chg')) else 0,
         }
@@ -732,8 +732,8 @@ def get_stock_detail(code: str) -> dict:
         "latest": {
             "close": round(float(latest['close']), 2) if pd.notna(latest.get('close')) else 0,
             "pct_chg": round(float(latest['pct_chg']), 2) if pd.notna(latest.get('pct_chg')) else 0,
-            "volume": float(latest['volume']),
-            "amount": float(latest['amount']),
+            "volume": float(latest['volume']) if pd.notna(latest.get('volume')) else 0,
+            "amount": float(latest['amount']) if pd.notna(latest.get('amount')) else 0,
             "turnover_rate": spot.get('turnover_rate'),
             "pe_ttm": spot.get('pe_ttm'),
             "market_cap": spot.get('market_cap'),
