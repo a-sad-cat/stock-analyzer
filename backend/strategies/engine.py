@@ -466,6 +466,50 @@ def run_strategy(db: Session, strategy_id: int, stock_limit: int = 0, top_k: int
 _scan_lock = threading.Lock()
 
 
+def _prefetch_kline_data():
+    """策略扫描前预拉取所有股票的增量 K 线数据，确保数据完整后再扫描"""
+    from services.data_service import get_all_stocks, get_daily_data
+    from config import SCAN_WORKERS
+    db_local = SessionLocal()
+    try:
+        all_stocks = get_all_stocks(db_local)
+        if not all_stocks:
+            return
+
+        # 过滤 ST + 北交所/科创/创业板
+        all_stocks = [s for s in all_stocks if not s.get('name', '').startswith(('ST', '*ST'))]
+        all_stocks = [s for s in all_stocks if not s.get('code', '').lower().startswith(('4', '8', '92', 'bj', '688', '300'))]
+
+        total = len(all_stocks)
+        counters = {'done': 0, 'failed': 0, 'lock': threading.Lock()}
+
+        logger.info(f"预拉取增量K线数据: {total} 只股票 (workers={SCAN_WORKERS})...")
+
+        def fetch_one(stock):
+            code = stock['code']
+            try:
+                df = get_daily_data(code)
+                if df.empty:
+                    with counters['lock']:
+                        counters['failed'] += 1
+            except Exception:
+                with counters['lock']:
+                    counters['failed'] += 1
+            with counters['lock']:
+                counters['done'] += 1
+                if counters['done'] % 200 == 0:
+                    logger.info(f"预拉取进度: {counters['done']}/{total} (失败 {counters['failed']})")
+
+        with ThreadPoolExecutor(max_workers=SCAN_WORKERS) as pool:
+            futures = {pool.submit(fetch_one, s): s for s in all_stocks}
+            for f in as_completed(futures):
+                pass
+
+        logger.info(f"预拉取完成: {counters['done']}/{total}, 失败 {counters['failed']} 只")
+    finally:
+        db_local.close()
+
+
 def run_all_strategies(db: Session, stock_limit: int = 0, top_k: int = 50) -> dict:
     """运行所有启用的策略（同一时间只允许一个全市场扫描）"""
     if not _scan_lock.acquire(blocking=False):
@@ -477,6 +521,11 @@ def run_all_strategies(db: Session, stock_limit: int = 0, top_k: int = 50) -> di
             _init_builtin_strategies(db)
 
         strategies = db.query(Strategy).filter(Strategy.enabled == 1).all()
+
+        # ---- Phase 1: 预拉取缺失的增量 K 线数据 ----
+        _prefetch_kline_data()
+        # ---- 预拉取完毕，进入策略扫描 ----
+
         all_results = {}
 
         for strategy in strategies:
