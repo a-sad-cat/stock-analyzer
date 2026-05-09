@@ -9,6 +9,7 @@ import logging
 from datetime import date, timedelta
 from typing import Optional
 
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -21,6 +22,23 @@ from models.stock import Stock
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# ============ AI 对话助手系统提示词 ============
+FINANCIAL_ASSISTANT_PROMPT = """你是一位专业的 A 股量化金融分析师助手，具备以下能力：
+
+1. **技术分析**：精通均线、MACD、RSI、KDJ、布林带、成交量等技术指标解读
+2. **策略研判**：理解多种A股交易策略（MACD金叉、均线突破、量价关系、N字战法等）
+3. **风险控制**：能给出止损位、仓位建议、风险评估
+4. **市场解读**：结合大盘环境、板块轮动、资金流向做综合判断
+5. **操作建议**：给出明确的买入/持有/卖出/观望建议，附带逻辑和风险提示
+
+回复原则：
+- 简洁有力，要点分明，多用数据支撑观点
+- 不确定时明确告知，不编造信息
+- 重要结论前加 ⚠️ 风险提示
+- 用口语化、易懂的语言解释专业概念
+- 每次回复控制在300字以内，除非用户要求详细分析
+- 不提供具体买卖价格建议，只给出分析框架和参考区间"""
 
 
 # ---------- Pydantic 模型 ----------
@@ -62,6 +80,22 @@ class AnalyzeResponse(BaseModel):
     elapsed_seconds: float = 0.0
 
 
+class ChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]  # 对话历史
+    stock_code: Optional[str] = None  # 可选：附带股票代码，自动注入该股票数据上下文
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    model: str = ""
+    tokens: int = 0
+
+
 def _result_to_response(r: AnalysisResult) -> dict:
     """将 AnalysisResult 转为 API 响应字典"""
     return {
@@ -96,6 +130,59 @@ def api_llm_status():
         "provider": engine.client._provider if engine.is_available else "未配置",
         "model": engine.client._model if engine.is_available else "未配置",
     }
+
+
+@router.post("/chat", response_model=ChatResponse)
+def api_chat(req: ChatRequest):
+    """
+    AI 金融助手对话接口
+
+    支持多轮对话，自动注入金融专家人设。
+    可选传入 stock_code，将自动附加该股票最新 K 线数据和技术指标作为上下文。
+    """
+    engine = get_analysis_engine()
+    if not engine.is_available:
+        raise HTTPException(status_code=503, detail="LLM 分析引擎未配置，请在环境变量中设置 LLM_API_KEY")
+
+    # 构建消息列表
+    messages = [{"role": "system", "content": FINANCIAL_ASSISTANT_PROMPT}]
+
+    # 如果传入了股票代码，自动注入数据上下文
+    if req.stock_code:
+        try:
+            db = next(get_db())
+            stock = db.query(Stock).filter(Stock.code == req.stock_code).first()
+            if stock:
+                df = get_daily_data(req.stock_code)
+                if not df.empty:
+                    latest = df.iloc[-1]
+                    context_parts = [f"[系统注入] 用户正在关注股票 {req.stock_code}（{stock.name}），以下是实时数据：\n"]
+                    # 最新行情
+                    context_parts.append(f"- 最新价: {latest.get('close', 'N/A')}，涨跌幅: {latest.get('pct_chg', 'N/A')}%")
+                    context_parts.append(f"- 成交量: {latest.get('volume', 'N/A')}，成交额: {latest.get('amount', 'N/A')}")
+                    # 技术指标
+                    for label, key in [('MA5', 'MA5'), ('MA10', 'MA10'), ('MA20', 'MA20'), (None, None)]:
+                        if key and key in df.columns and pd.notna(latest.get(key)):
+                            context_parts.append(f"- {label}: {round(float(latest[key]), 2)}")
+                    context_parts.append("- 请在回复中结合以上数据进行分析。")
+                    messages.append({"role": "system", "content": "\n".join(context_parts)})
+        except Exception as e:
+            logger.warning(f"注入股票数据上下文失败: {e}")
+
+    # 追加用户对话历史
+    for msg in req.messages:
+        messages.append({"role": msg.role, "content": msg.content})
+
+    try:
+        content, tokens = engine.client.chat_conversation(messages)
+        return ChatResponse(
+            reply=content,
+            model=engine.client._model,
+            tokens=tokens,
+        )
+    except Exception as e:
+        logger.error(f"对话请求失败: {e}")
+        raise HTTPException(status_code=500, detail=f"AI 服务异常: {str(e)}")
 
 
 @router.post("/analyze")

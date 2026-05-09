@@ -149,6 +149,39 @@ class LLMClient:
 
         return content, tokens
 
+    def chat_conversation(self, messages: list[dict]) -> tuple[str, int]:
+        """
+        多轮对话接口（不强制 JSON 输出）
+
+        Args:
+            messages: [{"role": "system/user/assistant", "content": "..."}, ...]
+
+        Returns:
+            (响应文本, 消耗的 token 数)
+        """
+        logger.info(
+            f"[LLM] 对话请求 {self._provider}/{self._model} | "
+            f"消息数={len(messages)}"
+        )
+
+        response = self._client.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            temperature=self._temperature,
+            max_tokens=self._max_tokens,
+        )
+
+        content = response.choices[0].message.content
+        usage = response.usage
+        tokens = usage.total_tokens if usage else 0
+
+        logger.info(
+            f"[LLM] 对话响应完成 | tokens={tokens} | "
+            f"模型={response.model}"
+        )
+
+        return content, tokens
+
 
 # ========================================
 # 股票分析 Prompt 构建器

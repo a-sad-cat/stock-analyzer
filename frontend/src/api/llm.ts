@@ -39,6 +39,17 @@ export interface LLMStatus {
   model: string
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface ChatResponse {
+  reply: string
+  model: string
+  tokens: number
+}
+
 // ---------- API 函数 ----------
 
 /** 检查 LLM 状态 */
@@ -79,5 +90,14 @@ export const analyzeWithScan = async (
   const params: any = { code }
   if (strategyId) params.strategy_id = strategyId
   const res = await api.post('/llm/analyze-with-scan', null, { params, timeout: 300000 })
+  return res.data
+}
+
+/** AI 金融助手对话 */
+export const chatWithAI = async (
+  messages: ChatMessage[],
+  stockCode?: string,
+): Promise<ChatResponse> => {
+  const res = await api.post('/llm/chat', { messages, stock_code: stockCode }, { timeout: 120000 })
   return res.data
 }
