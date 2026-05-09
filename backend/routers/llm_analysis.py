@@ -18,6 +18,7 @@ from database import get_db
 from services.llm_service import get_analysis_engine, AnalysisResult, collect_extra_context
 from services.data_service import get_daily_data
 from models.stock import Stock
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -154,18 +155,60 @@ def api_chat(req: ChatRequest):
             stock = db.query(Stock).filter(Stock.code == req.stock_code).first()
             if stock:
                 df = get_daily_data(req.stock_code)
-                if not df.empty:
+                context_parts = [
+                    f"[系统注入] 用户正在关注 {req.stock_code}（{stock.name}），请结合以下实时数据进行专业分析：\n"
+                ]
+
+                if not df.empty and len(df) >= 5:
                     latest = df.iloc[-1]
-                    context_parts = [f"[系统注入] 用户正在关注股票 {req.stock_code}（{stock.name}），以下是实时数据：\n"]
-                    # 最新行情
-                    context_parts.append(f"- 最新价: {latest.get('close', 'N/A')}，涨跌幅: {latest.get('pct_chg', 'N/A')}%")
-                    context_parts.append(f"- 成交量: {latest.get('volume', 'N/A')}，成交额: {latest.get('amount', 'N/A')}")
+                    prev = df.iloc[-2]
+                    # 最近5日行情摘要
+                    recent5 = df.tail(5)
+                    context_parts.append("### 最近行情")
+                    close_latest = float(latest.get('close', 0))
+                    close_5d_ago = float(recent5.iloc[0].get('close', close_latest)) if len(recent5) >= 5 else close_latest
+                    chg_5d = (close_latest - close_5d_ago) / close_5d_ago * 100 if close_5d_ago else 0
+                    context_parts.append(f"- 最新价: {close_latest:.2f}  |  昨收: {float(prev.get('close', 0)):.2f}  |  当日涨跌: {float(latest.get('pct_chg', 0)):.2f}%")
+                    context_parts.append(f"- 5日涨跌: {chg_5d:+.2f}%  |  成交量: {latest.get('volume', 'N/A')}  |  成交额: {latest.get('amount', 'N/A')}")
+
                     # 技术指标
-                    for label, key in [('MA5', 'MA5'), ('MA10', 'MA10'), ('MA20', 'MA20'), (None, None)]:
-                        if key and key in df.columns and pd.notna(latest.get(key)):
-                            context_parts.append(f"- {label}: {round(float(latest[key]), 2)}")
-                    context_parts.append("- 请在回复中结合以上数据进行分析。")
-                    messages.append({"role": "system", "content": "\n".join(context_parts)})
+                    indicators = []
+                    for label, key in [('MA5', 'MA5'), ('MA10', 'MA10'), ('MA20', 'MA20'),
+                                        ('DIF', 'DIF'), ('DEA', 'DEA'), ('MACD', 'MACD'),
+                                        ('RSI', 'RSI'), ('K', 'K'), ('D', 'D')]:
+                        if key in df.columns and pd.notna(latest.get(key)):
+                            val = round(float(latest[key]), 2)
+                            if key == 'RSI':
+                                zone = '超买' if val > 70 else '超卖' if val < 30 else '中性'
+                                indicators.append(f"{key}: {val} ({zone})")
+                            elif key == 'MACD':
+                                indicators.append(f"{key}: {val} ({'多头' if val > 0 else '空头'})")
+                            else:
+                                indicators.append(f"{key}: {val}")
+                    if indicators:
+                        context_parts.append(f"- 技术指标: {' | '.join(indicators[:8])}")
+                else:
+                    context_parts.append("- K线数据暂不可用")
+
+                # 板块和新闻
+                try:
+                    extra = collect_extra_context(req.stock_code, db_session=db, timeout=3)
+                    if extra.get("sectors"):
+                        context_parts.append(f"\n### 所属板块\n{', '.join(extra['sectors'])}")
+                    if extra.get("announcements"):
+                        context_parts.append("\n### 最新公告")
+                        for a in extra["announcements"][:3]:
+                            context_parts.append(f"- [{a.get('date', '')}] {a.get('title', '')}")
+                    if extra.get("news"):
+                        context_parts.append("\n### 相关新闻")
+                        for n in extra["news"][:3]:
+                            context_parts.append(f"- {n.get('title', '')} ({n.get('source', '')})")
+                except Exception:
+                    pass
+
+                context_parts.append("\n请在回复中结合以上所有数据给出分析判断。")
+                messages.append({"role": "system", "content": "\n".join(context_parts)})
+            db.close()
         except Exception as e:
             logger.warning(f"注入股票数据上下文失败: {e}")
 
