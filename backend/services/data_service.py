@@ -298,10 +298,10 @@ def get_all_stocks(db: Session = None) -> list[dict]:
 
 
 # K线数据源轮转：每 ROTATE_INTERVAL 次调用切换到下一个数据源，分散负载防封 IP
-# 3源 × 7次轮转: 3655÷12workers÷(CALLS_PER_SOURCE=7) → 每源约 174 批次，间隔充裕
+# 2源 × 5次轮转: 均匀分散，单源被封自动切换
 _fetch_counter = 0
 _fetch_counter_lock = threading.Lock()
-ROTATE_INTERVAL = 7
+ROTATE_INTERVAL = 5
 
 
 def _fetch_sina(symbol: str, start_date: str, end_date: str):
@@ -337,7 +337,6 @@ def _fetch_tencent(symbol: str, start_date: str, end_date: str):
 
 _KLINE_SOURCES = [
     ('Sina',       _fetch_sina),
-    ('东方财富',   _fetch_eastmoney),
     ('腾讯',       _fetch_tencent),
 ]
 

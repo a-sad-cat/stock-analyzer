@@ -470,6 +470,7 @@ def _prefetch_kline_data():
     """策略扫描前预拉取所有股票的增量 K 线数据，确保数据完整后再扫描"""
     from services.data_service import get_all_stocks, get_daily_data
     from config import SCAN_WORKERS
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     db_local = SessionLocal()
     try:
         all_stocks = get_all_stocks(db_local)
