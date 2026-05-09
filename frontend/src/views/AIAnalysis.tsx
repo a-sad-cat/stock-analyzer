@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
-  Input, Button, Spin, Typography, Space, Tag, AutoComplete,
+  Input, Button, Spin, Typography, Space, Tag,
 } from 'antd'
 import {
-  RobotOutlined, SendOutlined, DeleteOutlined, SearchOutlined,
+  RobotOutlined, SendOutlined,
   StockOutlined, ClearOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -13,7 +12,6 @@ import {
   getLLMStatus, chatWithAI,
   type ChatMessage, type LLMStatus,
 } from '../api/llm'
-import { searchStocks } from '../api/index'
 
 const { Text } = Typography
 
@@ -27,7 +25,7 @@ interface UIMessage extends ChatMessage {
 const WELCOME_MSG: UIMessage = {
   id: 'welcome',
   role: 'assistant',
-  content: '你好！我是你的 A 股量化分析助手。\n\n我可以帮你：\n• 分析个股技术面（均线/MACD/RSI/KDJ/布林带）\n• 解读策略信号和买卖时机\n• 评估风险和大盘环境\n• 解答金融概念和操作疑问\n\n输入股票代码或直接提问，随时开始 👇',
+  content: '你好！我是你的 A 股量化分析助手。\n\n我可以帮你：\n\u2022 分析个股技术面（均线/MACD/RSI/KDJ/布林带）\n\u2022 解读策略信号和买卖时机\n\u2022 评估风险和大盘环境\n\u2022 解答金融概念和操作疑问\n\n输入股票代码或直接提问，随时开始 \uD83D\uDC47',
   time: '',
 }
 
@@ -38,11 +36,7 @@ const AIAnalysis: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [llmStatus, setLLMStatus] = useState<LLMStatus | null>(null)
 
-  // 搜索
-  const [searchKeyword, setSearchKeyword] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
-
-  // 当前关注的股票（自动注入数据上下文）
+  // 当前关注的股票（输入6位代码自动设置）
   const [activeStock, setActiveStock] = useState<{ code: string; name: string } | null>(null)
 
   const msgListRef = useRef<HTMLDivElement>(null)
@@ -78,10 +72,11 @@ const AIAnalysis: React.FC = () => {
     if (!text || loading) return
     setInput('')
 
-    // 检查是否是股票代码
+    // 单独输入 6 位代码 → 设置活跃股票并自动提问
     const codeMatch = text.match(/^(\d{6})$/)
     if (codeMatch) {
-      handleSearch(codeMatch[1])
+      setActiveStock({ code: codeMatch[1], name: codeMatch[1] })
+      setInput(`${codeMatch[1]}怎么样？`)
       return
     }
 
@@ -102,7 +97,6 @@ const AIAnalysis: React.FC = () => {
 
     try {
       const res = await chatWithAI(chatMsgs, activeStock?.code)
-      // 替换加载消息
       setMessages(prev => prev.map(m =>
         m.id === loadingMsg.id
           ? { ...m, content: res.reply, loading: false, tokens: res.tokens }
@@ -119,34 +113,11 @@ const AIAnalysis: React.FC = () => {
     }
   }
 
-  // 处理股票搜索
-  const handleSearch = async (keyword: string) => {
-    setSearchKeyword(keyword)
-    if (keyword.length < 2) { setSearchResults([]); return }
-    try {
-      const res = await searchStocks(keyword)
-      setSearchResults((res as any[])?.slice(0, 8) || [])
-    } catch {
-      setSearchResults([])
-    }
-  }
-
-  // 选中股票
-  const selectStock = (stock: any) => {
-    setActiveStock({ code: stock.code, name: stock.name })
-    setInput(`${stock.name}(${stock.code})怎么样？`)
-    setSearchResults([])
-    setSearchKeyword('')
-    setTimeout(() => inputRef.current?.focus(), 100)
-  }
-
   const clearChat = () => {
     setMessages([WELCOME_MSG])
     setActiveStock(null)
     idCounter.current = 0
   }
-
-  const stockBtnColor = activeStock ? '#1677ff' : '#d9d9d9'
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', maxWidth: 700, margin: '0 auto' }}>
@@ -160,7 +131,7 @@ const AIAnalysis: React.FC = () => {
           <Text strong>AI 金融助手</Text>
           {llmStatus && (
             <Text type="secondary" style={{ fontSize: 11 }}>
-              {llmStatus.available ? '🟢 在线' : '🔴 离线'}
+              {llmStatus.available ? '\uD83D\uDFE2 在线' : '\uD83D\uDD34 离线'}
             </Text>
           )}
         </Space>
@@ -187,7 +158,6 @@ const AIAnalysis: React.FC = () => {
             display: 'flex', flexDirection: 'column',
             alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
           }}>
-            {/* 气泡 */}
             <div style={{
               maxWidth: '85%',
               padding: '10px 14px',
@@ -210,66 +180,20 @@ const AIAnalysis: React.FC = () => {
                 msg.content
               )}
             </div>
-            {/* 元信息 */}
             {msg.time && (
               <Text type="secondary" style={{ fontSize: 10, marginTop: 2, marginLeft: 4, marginRight: 4 }}>
-                {msg.time}{msg.tokens ? ` · ${msg.tokens}t` : ''}
+                {msg.time}{msg.tokens ? ` \u00B7 ${msg.tokens}t` : ''}
               </Text>
             )}
           </div>
         ))}
       </div>
 
-      {/* 搜索下拉 */}
-      {searchResults.length > 0 && (
-        <div style={{
-          margin: '0 16px', padding: '8px 12px',
-          background: '#fff', border: '1px solid #e8e8e8', borderRadius: 8,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.08)', flexShrink: 0,
-        }}>
-          {searchResults.map(s => (
-            <div
-              key={s.code}
-              onClick={() => selectStock(s)}
-              style={{
-                padding: '6px 8px', borderRadius: 4, cursor: 'pointer',
-                display: 'flex', justifyContent: 'space-between',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f0f5ff')}
-              onMouseLeave={e => (e.currentTarget.style.background = '')}
-            >
-              <Text strong>{s.name}</Text>
-              <Text type="secondary">{s.code}</Text>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 输入框 */}
+      {/* 输入框 — 底部 */}
       <div style={{
         padding: '8px 16px 12px', borderTop: '1px solid #f0f0f0', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <AutoComplete
-            value={searchKeyword}
-            onChange={(v) => handleSearch(v)}
-            style={{ width: 140 }}
-            options={searchResults.map(s => ({
-              value: s.code,
-              label: <span>{s.name} <Text type="secondary">{s.code}</Text></span>,
-            }))}
-            onSelect={(v) => {
-              const s = searchResults.find(x => x.code === v)
-              if (s) selectStock(s)
-            }}
-          >
-            <Input
-              prefix={<SearchOutlined style={{ color: '#999' }} />}
-              placeholder="搜索股票"
-              size="small"
-              allowClear
-            />
-          </AutoComplete>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <Input.TextArea
             ref={inputRef}
             value={input}
@@ -280,7 +204,7 @@ const AIAnalysis: React.FC = () => {
                 handleSend()
               }
             }}
-            placeholder="输入股票代码或直接提问..."
+            placeholder="输入 6 位股票代码或直接提问..."
             autoSize={{ minRows: 1, maxRows: 4 }}
             disabled={loading}
             style={{ flex: 1, borderRadius: 8 }}
@@ -290,11 +214,11 @@ const AIAnalysis: React.FC = () => {
             icon={<SendOutlined />}
             onClick={handleSend}
             loading={loading}
-            style={{ borderRadius: 8 }}
+            style={{ borderRadius: 8, marginBottom: 2 }}
           />
         </div>
         <Text type="secondary" style={{ fontSize: 10, marginTop: 4, display: 'block' }}>
-          输入 6 位代码查股票 · Enter 发送 · Shift+Enter 换行
+          Enter 发送 \u00B7 Shift+Enter 换行 \u00B7 输入 6 位代码查股
         </Text>
       </div>
     </div>
