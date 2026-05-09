@@ -30,6 +30,7 @@ from config import (
     LLM_TEMPERATURE,
     LLM_MAX_TOKENS,
     LLM_MAX_RETRIES,
+    TAVILY_API_KEY,
 )
 
 logger = logging.getLogger(__name__)
@@ -722,3 +723,66 @@ def collect_extra_context(
         pass
 
     return context
+
+
+# ========================================
+# 联网搜索 — Tavily Search API
+# ========================================
+def search_financial_news(query: str, max_results: int = 5) -> str:
+    """
+    通过 Tavily 搜索最新金融资讯，返回格式化文本
+
+    Args:
+        query: 搜索关键词（如 "600000 浦发银行 最新消息"）
+        max_results: 最大结果数
+
+    Returns:
+        格式化的搜索结果文本，失败返回空字符串
+    """
+    if not TAVILY_API_KEY:
+        return ""
+
+    try:
+        import requests
+
+        resp = requests.post(
+            "https://api.tavily.com/search",
+            json={
+                "api_key": TAVILY_API_KEY,
+                "query": query,
+                "search_depth": "basic",
+                "include_answer": True,
+                "max_results": max_results,
+            },
+            timeout=10,
+        )
+
+        if resp.status_code != 200:
+            logger.warning(f"Tavily 搜索失败: HTTP {resp.status_code}")
+            return ""
+
+        data = resp.json()
+        parts = []
+
+        # 优先展示 AI 答案
+        if data.get("answer"):
+            parts.append(f"[AI 综合答案] {data['answer']}\n")
+
+        # 搜索结果列表
+        results = data.get("results", [])
+        if results:
+            parts.append("### 搜索结果")
+            for i, r in enumerate(results[:max_results], 1):
+                title = r.get("title", "")
+                content = r.get("content", "")
+                url = r.get("url", "")
+                parts.append(f"{i}. **{title}**\n   {content[:200]}\n   [来源]({url})")
+
+        if not parts:
+            return ""
+
+        return "\n\n".join(parts)
+
+    except Exception as e:
+        logger.warning(f"联网搜索异常: {e}")
+        return ""

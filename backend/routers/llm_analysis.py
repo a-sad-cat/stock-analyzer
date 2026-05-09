@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from services.llm_service import get_analysis_engine, AnalysisResult, collect_extra_context
+from services.llm_service import get_analysis_engine, AnalysisResult, collect_extra_context, search_financial_news
 from services.data_service import get_daily_data
 from models.stock import Stock
 from sqlalchemy.orm import Session
@@ -211,6 +211,30 @@ def api_chat(req: ChatRequest):
             db.close()
         except Exception as e:
             logger.warning(f"注入股票数据上下文失败: {e}")
+
+    # 联网搜索：根据用户最后一条消息搜索最新资讯
+    last_user_msg = ""
+    for msg in reversed(req.messages):
+        if msg.role == "user":
+            last_user_msg = msg.content
+            break
+    if last_user_msg:
+        search_query = last_user_msg
+        if req.stock_code:
+            try:
+                db2 = next(get_db())
+                stock2 = db2.query(Stock).filter(Stock.code == req.stock_code).first()
+                db2.close()
+                stock_name = stock2.name if stock2 else req.stock_code
+                search_query = f"{req.stock_code} {stock_name} {search_query}"
+            except Exception:
+                pass
+        search_result = search_financial_news(search_query)
+        if search_result:
+            messages.append({
+                "role": "system",
+                "content": f"[联网搜索结果]\n以下是通过搜索获取到的最新资讯，请结合这些信息进行分析：\n\n{search_result}",
+            })
 
     # 追加用户对话历史
     for msg in req.messages:

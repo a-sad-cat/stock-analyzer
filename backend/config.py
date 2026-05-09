@@ -64,6 +64,10 @@ LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "2048"))
 # 最大重试次数
 LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "2"))
 
+# 联网搜索配置 (Tavily — 免费 1000次/月, 专为AI设计)
+# 注册: https://tavily.com
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
+
 # 定时任务配置（每天自动刷新数据的时间）
 # 0:00 凌晨空闲时段 + 17:00 收盘后，避免与用户操作争抢 CPU
 SCHEDULE_TIMES = ["00:00", "17:00"]
